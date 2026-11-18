@@ -19,7 +19,7 @@ $logFile = Join-Path $stateDir 'update.log'
 function Log([string]$message) {
   $line = ' ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $message
   Add-Content -LiteralPath $logFile -Value $line -Encoding UTF8
-  Write-Output $message
+  Write-Host $message
 }
 
 function Get-ExistingExtension([string]$root, [string]$packageName) {
