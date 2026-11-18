@@ -46,7 +46,6 @@ jobs:
               assert manifest["contributes"]["scripts"][0]["path"]=="./main.lua"
           print("Valid:",path)
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: meowmoon-hue-shift-v0.1.0
-          path: dist/*.aseprite-extension
+      # Artifact upload is deliberately disabled: this private account's
+      # GitHub Actions artifact storage quota is currently exhausted.
+      # Build locally with: python3 scripts/build_hue_shift.py
