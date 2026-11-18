@@ -12,7 +12,7 @@ function init(plugin)
     title = "Hue Shift: Generate Ramp",
     group = "file_scripts",
     onclick = function()
-      dialog.open(ramp, palette, wheel)
+      dialog.open(ramp, palette, wheel, plugin.version)
     end
   }
 

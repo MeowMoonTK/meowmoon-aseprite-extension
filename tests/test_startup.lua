@@ -26,4 +26,37 @@ app.isUIAvailable = false
 init(plugin)
 assert(#calls == 1)
 os.execute = execute
-print("OK: Hue Shift starts one background release check during Windows GUI startup")
+
+-- Exercise the real dialog constructor and inspect the version footer.
+-- Aseprite exposes plugin.version from the installed package.json.
+plugin.version = "0.1.4"
+app.isUIAvailable = true
+app.os.windows = false
+app.fgColor = { red=100, green=120, blue=140 }
+app.pixelColor = { rgba = function() return 0 end }
+Color = function(c) return c end
+ColorMode = { RGB = 0 }
+Image = function(w,h)
+  return { width=w,height=h,drawPixel=function() end }
+end
+local shownVersion = nil
+Dialog = function()
+  local dlg = { data = {} }
+  function dlg:label(spec)
+    if spec.label == "Version:" then shownVersion = spec.text end
+    return self
+  end
+  return setmetatable(dlg, {
+    __index = function()
+      return function(self) return self end
+    end
+  })
+end
+local command
+plugin.newCommand = function(_, spec) command = spec end
+init(plugin)
+assert(type(command.onclick) == "function")
+command.onclick()
+assert(shownVersion == "v0.1.4", "The extension version must be visible in the panel")
+
+print("OK: Windows startup check and panel displays the installed plugin version")

@@ -1,7 +1,7 @@
 -- Native Aseprite Color Ramp dialog with HSV wheel overview.
 local M = {}
 
-function M.open(ramp, paletteWriter, wheel)
+function M.open(ramp, paletteWriter, wheel, version)
   if not app.isUIAvailable then return end
 
   local picked = app.fgColor
@@ -100,6 +100,10 @@ function M.open(ramp, paletteWriter, wheel)
     id = "status",
     label = "Status:",
     text = "Preview only. No sprite changes yet."
+  }
+  dlg:label{
+    label = "Version:",
+    text = "v" .. tostring(version or "unknown")
   }
   dlg:button{
     id = "apply",
