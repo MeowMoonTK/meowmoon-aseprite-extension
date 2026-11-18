@@ -2,9 +2,9 @@
 
 Public repository containing independent Aseprite extensions.
 
-| Extension | Development version | Source |
+| Extension | Latest Release | Source |
 | --- | --- | --- |
-| Hue Shift | v0.1.5 (source; not yet released) | [extensions/hue-shift](extensions/hue-shift) |
+| Hue Shift | [v0.1.5](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.5) | [extensions/hue-shift](extensions/hue-shift) |
 
 ## Hue Shift
 
