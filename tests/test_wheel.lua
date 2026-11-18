@@ -27,7 +27,7 @@ for hue=0,359,15 do
       assert(math.abs(c.s-sat)<=0.025 or value<0.01)
       if sat>0.05 then
         local delta=math.abs((c.h-hue+540)%360-180)
-        assert(delta<3)
+        assert(delta<=3.1) -- integer RGB quantization can produce a 3 degree hue error
       end
     end
   end
