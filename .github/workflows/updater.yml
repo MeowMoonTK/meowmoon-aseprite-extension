@@ -33,3 +33,21 @@ jobs:
             throw 'Invalid updater configuration'
           }
           Write-Host 'PowerShell syntax and updater manifest OK.'
+      - name: Exercise private Release updater in a temporary Aseprite directory
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sandbox = Join-Path $env:RUNNER_TEMP 'meowmoon-aseprite-e2e'
+          ./updater/update.ps1 -Repository $env:GITHUB_REPOSITORY -AsepriteUserFolder $sandbox
+          if ($LASTEXITCODE -ne 0) { throw 'Updater test process failed' }
+          $installed = Join-Path $sandbox 'extensions/meowmoon-hue-shift/package.json'
+          if (-not (Test-Path -LiteralPath $installed)) { throw 'Updater did not install Hue Shift' }
+          $manifest = Get-Content -LiteralPath $installed -Raw | ConvertFrom-Json
+          if ($manifest.version -ne '0.1.2') { throw ('Wrong installed version: ' + $manifest.version) }
+          # A second update must be idempotent and leave the same installation intact.
+          ./updater/update.ps1 -Repository $env:GITHUB_REPOSITORY -AsepriteUserFolder $sandbox
+          if ($LASTEXITCODE -ne 0) { throw 'Idempotence check failed' }
+          $manifest2 = Get-Content -LiteralPath $installed -Raw | ConvertFrom-Json
+          if ($manifest2.version -ne '0.1.2') { throw 'Installed version changed unexpectedly' }
+          Write-Host 'Private Release download, SHA256 verification, install and idempotence OK.'
