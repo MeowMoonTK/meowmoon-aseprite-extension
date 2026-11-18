@@ -1,13 +1,19 @@
 {
   "name": "meowmoon-hue-shift",
   "displayName": "MeowMoon Hue Shift",
-  "description": "Generate a color ramp with six hue-shift styles and a hue/saturation wheel.",
-  "version": "0.1.2",
-  "author": { "name": "MeowMoonTK" },
-  "categories": ["Scripts"],
+  "description": "Color Ramp generator with a private GitHub Release update check on Aseprite startup.",
+  "version": "0.1.3",
+  "author": {
+    "name": "MeowMoonTK"
+  },
+  "categories": [
+    "Scripts"
+  ],
   "contributes": {
     "scripts": [
-      { "path": "./main.lua" }
+      {
+        "path": "./main.lua"
+      }
     ]
   }
 }
