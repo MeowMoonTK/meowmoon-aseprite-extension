@@ -1,9 +1,10 @@
 # One-time setup for the private Aseprite auto-updater.
 [CmdletBinding()]
-param([switch]$NoSchedule, [switch]$SkipFirstCheck)
+param([switch]$NoSchedule, [switch]$StartupOnly, [switch]$SkipFirstCheck)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($NoSchedule -and $StartupOnly) { throw 'Choose either -NoSchedule or -StartupOnly.' }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
   throw 'Install GitHub CLI first: winget install --id GitHub.cli'
@@ -25,7 +26,26 @@ foreach ($name in @('update.ps1', 'extensions.json')) {
 }
 
 $updater = Join-Path $destination 'update.ps1'
-if (-not $NoSchedule) {
+function Install-StartupShortcut {
+  $startupFolder = [Environment]::GetFolderPath('Startup')
+  if (-not $startupFolder) { throw 'Windows Startup folder is unavailable.' }
+  New-Item -ItemType Directory -Path $startupFolder -Force | Out-Null
+  $shortcutPath = Join-Path $startupFolder 'MeowMoon Aseprite Extensions Updater.lnk'
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcut = $shell.CreateShortcut($shortcutPath)
+  $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $shortcut.Arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $updater + '"'
+  $shortcut.WorkingDirectory = $destination
+  $shortcut.Description = 'Check for private Aseprite extension updates at user sign-in'
+  $shortcut.WindowStyle = 7
+  $shortcut.Save()
+  Write-Host 'Startup fallback installed: checks at Windows sign-in (not every day at noon).'
+}
+
+if ($StartupOnly) {
+  Install-StartupShortcut
+} elseif (-not $NoSchedule) {
+  try {
   $taskName = 'MeowMoon Aseprite Extensions Updater'
   $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $updater + '"'
   $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
@@ -36,7 +56,13 @@ if (-not $NoSchedule) {
   $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
   $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
   Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers -Principal $principal -Settings $settings -Force | Out-Null
+  $oldShortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'MeowMoon Aseprite Extensions Updater.lnk'
+  if (Test-Path -LiteralPath $oldShortcut) { Remove-Item -LiteralPath $oldShortcut -Force }
   Write-Host 'Scheduled checks on Windows login and every day at 12:00.'
+  } catch {
+    Write-Warning ('Task Scheduler access denied or unavailable: ' + $_.Exception.Message)
+    Install-StartupShortcut
+  }
 }
 
 if (-not $SkipFirstCheck) {

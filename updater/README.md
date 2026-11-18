@@ -1,6 +1,6 @@
 # Private extension auto-updater (Windows)
 
-A separate, opt-in Windows scheduled task for the private `MeowMoonTK/meowmoon-aseprite-extension` GitHub repository.
+A separate, opt-in Windows auto-updater for the private `MeowMoonTK/meowmoon-aseprite-extension` GitHub repository.
 
 **Requirements:** Windows PowerShell 5.1+, Aseprite, [GitHub CLI](https://cli.github.com/) installed and authenticated with access to the private repo.
 
@@ -15,7 +15,9 @@ A separate, opt-in Windows scheduled task for the private `MeowMoonTK/meowmoon-a
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\updater\install.ps1
 ```
 
-The installer copies `update.ps1` and `extensions.json` into `%LOCALAPPDATA%\MeowMoon\AsepriteUpdater`, and registers a **non-elevated task under your own Windows account**. It checks at Windows logon and daily at noon. It also checks and installs immediately on the first run when Aseprite is closed.
+The installer copies `update.ps1` and `extensions.json` into `%LOCALAPPDATA%\MeowMoon\AsepriteUpdater`. It first attempts Task Scheduler (sign-in and daily 12:00). When registration fails with Access Denied / 0x80070005, it automatically installs a **per-user Startup shortcut** instead (checks at Windows sign-in only; no administrator rights required). The initial check still runs immediately when Aseprite is closed.
+
+To force Startup mode, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\updater\install.ps1 -StartupOnly`. For manual-only installation use `-NoSchedule`.
 
 The updater installs/replaces the extension under `%APPDATA%\Aseprite\extensions`. If Aseprite is open, it postpones installation to a future scheduled run; restart Aseprite after an update.
 
@@ -33,7 +35,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\MeowM
 
 Log: `%LOCALAPPDATA%\MeowMoon\AsepriteUpdater\update.log`.
 
-Uninstall automatic updater (does not uninstall extensions):
+Uninstall automatic updater, including any Startup shortcut (does not uninstall extensions):
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\updater\uninstall.ps1
 ```
@@ -53,4 +55,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\updater\uninstall.ps1
 
 When Hue Shift's version changes and the feature branch is merged into `main`, GitHub Actions builds the archive, computes SHA256, and creates a private Release tagged `hue-shift-vX.Y.Z`. Releases do not consume GitHub Actions artifact-upload quota.
 
-**Known limitations:** The background updater relies on a Windows task and authenticated GitHub CLI, so it cannot run if those credentials expire, if Task Scheduler is blocked, or if Windows is logged out. It checks on login and at noon, not immediately every time the Aseprite executable starts. The initial Windows setup and updating must be verified on your own PC.
+**Known limitations:** The background updater relies on a Windows task or per-user Startup shortcut and authenticated GitHub CLI, so it cannot run if those credentials expire, if Task Scheduler is blocked, or if Windows is logged out. Task Scheduler checks at sign-in and noon; Startup fallback checks only at sign-in. Neither monitors Aseprite launches. The initial Windows setup and updating must be verified on your own PC.
