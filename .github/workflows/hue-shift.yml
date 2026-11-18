@@ -1,0 +1,51 @@
+name: Hue Shift
+
+on:
+  push:
+    paths:
+      - "extensions/hue-shift/**"
+      - "tests/test_hue_shift.lua"
+      - "scripts/build_hue_shift.py"
+      - ".github/workflows/hue-shift.yml"
+  pull_request:
+    paths:
+      - "extensions/hue-shift/**"
+      - "tests/test_hue_shift.lua"
+      - "scripts/build_hue_shift.py"
+      - ".github/workflows/hue-shift.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.4
+      - name: Run Lua regression tests
+        run: lua5.4 tests/test_hue_shift.lua
+      - name: Build Aseprite extension
+        run: python3 scripts/build_hue_shift.py
+      - name: Validate extension archive
+        run: |
+          python3 - <<'PY'
+          import json, zipfile
+          from pathlib import Path
+          path=next(Path("dist").glob("hue-shift-*.aseprite-extension"))
+          with zipfile.ZipFile(path) as archive:
+              assert all(name in archive.namelist() for name in (
+                "package.json", "main.lua", "src/color.lua", "src/ramp.lua",
+                "src/palette.lua", "src/dialog.lua"))
+              manifest=json.loads(archive.read("package.json"))
+              assert manifest["version"]=="0.1.0"
+              assert manifest["contributes"]["scripts"][0]["path"]=="./main.lua"
+          print("Valid:",path)
+          PY
+      # Artifact upload is deliberately disabled: this private account's
+      # GitHub Actions artifact storage quota is currently exhausted.
+      # Build locally with: python3 scripts/build_hue_shift.py

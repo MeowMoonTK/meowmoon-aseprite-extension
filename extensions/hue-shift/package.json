@@ -1,0 +1,13 @@
+{
+  "name": "meowmoon-hue-shift",
+  "displayName": "MeowMoon Hue Shift",
+  "description": "Generate a color ramp from an anchor color using six hue-shift styles.",
+  "version": "0.1.0",
+  "author": { "name": "MeowMoonTK" },
+  "categories": ["Scripts"],
+  "contributes": {
+    "scripts": [
+      { "path": "./main.lua" }
+    ]
+  }
+}
