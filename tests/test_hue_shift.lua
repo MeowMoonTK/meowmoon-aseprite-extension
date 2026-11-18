@@ -66,9 +66,12 @@ _G.app = {
 local colors = ramp.generate{ center=samples[6],count=7,strength=50,style=ramp.styles[2] }
 local ok,msg = paletteWriter.append(s, colors)
 assert(ok and #p == 12 and commits == 1 and p.entries[5].r ~= nil and p.entries[11].b ~= nil)
-local full = makePalette(251)
-local rejected = paletteWriter.append({isValid=true,palettes={full}},colors)
-assert(not rejected and #full==251 and commits==1)
+-- Palette capacity does not constrain ramp generation or append.
+-- Aseprite decides whether a document's palette can be resized.
+local large = makePalette(251)
+local added = paletteWriter.append({isValid=true,palettes={large}},colors)
+assert(added and #large == 258 and commits == 2)
+assert(large.entries[251].r ~= nil and large.entries[257].b ~= nil)
 local multi = paletteWriter.append({isValid=true,palettes={p,p}},colors)
 assert(not multi)
-print("OK: " .. countCases .. " ramp scenarios, gamut conversions, palette writer")
+print("OK: " .. countCases .. " ramp scenarios, gamut conversions, unrestricted palette append")

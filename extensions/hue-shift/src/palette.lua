@@ -13,10 +13,6 @@ function M.append(sprite, rgbColors)
 
   local palette = palettes[1]
   local oldSize = #palette
-  if oldSize + #rgbColors > 256 then
-    return false, "Not enough palette slots (maximum 256). No colors were changed."
-  end
-
   local success, err = pcall(function()
     app.transaction("Hue Shift: Add Color Ramp", function()
       palette:resize(oldSize + #rgbColors)
