@@ -1,8 +1,8 @@
 {
   "name": "meowmoon-hue-shift",
   "displayName": "MeowMoon Hue Shift",
-  "description": "Color Ramp generator with a private GitHub Release update check on Aseprite startup.",
-  "version": "0.1.4",
+  "description": "Generate Hue Shift Color Ramps and update from public GitHub Releases on Aseprite startup.",
+  "version": "0.1.5",
   "author": {
     "name": "MeowMoonTK"
   },

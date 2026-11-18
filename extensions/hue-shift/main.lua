@@ -1,5 +1,5 @@
--- MeowMoon Hue Shift v0.1.4
--- Check private GitHub Releases on startup. No Task Scheduler.
+-- MeowMoon Hue Shift (version is read from plugin.version).
+-- A single public Release check starts when Aseprite opens on Windows.
 function init(plugin)
   local root = plugin.path
   local mathColor = dofile(app.fs.joinPath(root, "src", "color.lua"))
@@ -18,12 +18,14 @@ function init(plugin)
 
   if app.isUIAvailable and app.os and app.os.windows then
     local checker = app.fs.joinPath(root, "src", "autoupdate.ps1")
-    -- Launch a detached check so opening Aseprite is not delayed by network calls.
-    -- Aseprite might request permission for os.execute() on first use.
+    -- Detached: network requests never block the Hue Shift UI.
+    -- Aseprite may ask to allow os.execute() the first time.
     local command = 'cmd.exe /d /c start "" /min powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' .. checker .. '" -InstallDir "' .. root .. '"'
-    local ok, err = pcall(os.execute, command)
+    local ok, success, reason, exitCode = pcall(os.execute, command)
     if not ok then
-      print("Hue Shift: startup update check could not be started: " .. tostring(err))
+      print("Hue Shift: cannot start update check: " .. tostring(success))
+    elseif success == false or (type(success) == "number" and success ~= 0) then
+      print("Hue Shift: could not launch the update check (" .. tostring(reason) .. ", " .. tostring(exitCode) .. ")")
     end
   end
 end
