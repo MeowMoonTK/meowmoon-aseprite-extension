@@ -1,4 +1,5 @@
--- MeowMoon Hue Shift v0.1.1
+-- MeowMoon Hue Shift v0.1.2
+-- Updates are installed by the optional external Windows updater, not Lua.
 function init(plugin)
   local root = plugin.path
   local mathColor = dofile(app.fs.joinPath(root, "src", "color.lua"))
@@ -6,7 +7,6 @@ function init(plugin)
   local palette = dofile(app.fs.joinPath(root, "src", "palette.lua"))
   local wheel = dofile(app.fs.joinPath(root, "src", "wheel.lua"))
   local dialog = dofile(app.fs.joinPath(root, "src", "dialog.lua"))
-
   plugin:newCommand{
     id = "MeowMoonGenerateHueShiftRamp",
     title = "Hue Shift: Generate Ramp",
