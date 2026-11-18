@@ -63,7 +63,9 @@ try {
     'User-Agent' = 'MeowMoon-HueShift-Updater'
   }
   $api = 'https://api.github.com/repos/' + $repo + '/releases?per_page=100'
-  $releases = @(Invoke-RestMethod -Uri $api -Headers $headers -TimeoutSec 20 -ErrorAction Stop)
+  $releases = Invoke-RestMethod -Uri $api -Headers $headers -TimeoutSec 20 -ErrorAction Stop
+  # Invoke-RestMethod already returns the JSON release array; wrapping its call
+  # inside @() nests the array and hides tag_name from each release object.
   $latest = $null
   foreach ($release in $releases) {
     if ($release.draft -or $release.prerelease) { continue }
