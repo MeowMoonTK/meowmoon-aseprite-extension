@@ -1,4 +1,4 @@
-name: Hue Shift
+name: Hue Shift tests
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
       - "tests/test_hue_shift.lua"
       - "tests/test_wheel.lua"
       - "tests/test_startup.lua"
-      - "scripts/build_hue_shift.py"
       - ".github/workflows/hue-shift.yml"
   pull_request:
     paths:
@@ -15,7 +14,6 @@ on:
       - "tests/test_hue_shift.lua"
       - "tests/test_wheel.lua"
       - "tests/test_startup.lua"
-      - "scripts/build_hue_shift.py"
       - ".github/workflows/hue-shift.yml"
   workflow_dispatch:
 
@@ -23,7 +21,7 @@ permissions:
   contents: read
 
 jobs:
-  validate-and-build:
+  lua-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,27 +34,8 @@ jobs:
           lua5.4 tests/test_hue_shift.lua
           lua5.4 tests/test_wheel.lua
           lua5.4 tests/test_startup.lua
-      - name: Build Aseprite extension
-        run: python3 scripts/build_hue_shift.py
-      - name: Validate extension archive
-        run: |
-          python3 - <<'PY'
-          import json, zipfile
-          from pathlib import Path
-          path=next(Path("dist").glob("hue-shift-*.aseprite-extension"))
-          with zipfile.ZipFile(path) as archive:
-              assert all(name in archive.namelist() for name in (
-                "package.json", "main.lua", "src/color.lua", "src/ramp.lua",
-                "src/palette.lua", "src/wheel.lua", "src/dialog.lua",
-                "src/autoupdate.ps1"))
-              manifest=json.loads(archive.read("package.json"))
-              assert path.name==f'hue-shift-{manifest["version"]}.aseprite-extension'
-              assert manifest["contributes"]["scripts"][0]["path"]=="./main.lua"
-          print("Valid:",path)
-          PY
-      # Actions artifact uploads disabled due to the account's storage quota.
 
-  check-updater-syntax:
+  updater-syntax:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,30 +50,6 @@ jobs:
           ) | Out-Null
           if ($errorsFound.Count -gt 0) { throw ($errorsFound | Out-String) }
           Write-Host 'PowerShell startup updater syntax OK.'
-  release:
-    needs: [validate-and-build, check-updater-syntax]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create private versioned release (if not yet published)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version=$(python3 -c 'import json; print(json.load(open("extensions/hue-shift/package.json"))["version"])')
-          tag="hue-shift-v${version}"
-          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            echo "Release already exists: ${tag}"
-            exit 0
-          fi
-          python3 scripts/build_hue_shift.py
-          asset="dist/hue-shift-${version}.aseprite-extension"
-          sha="dist/hue-shift-${version}.sha256"
-          ( cd dist && sha256sum "hue-shift-${version}.aseprite-extension" > "hue-shift-${version}.sha256" )
-          gh release create "${tag}" "${asset}" "${sha}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --target "${GITHUB_SHA}" \
-            --title "Hue Shift v${version}" \
-            --notes "Private Aseprite Hue Shift extension. Includes SHA256 checksum for the built-in Aseprite startup updater."
+
+# No automatic package build or GitHub Release creation.
+# The owner requests each build; releases are published on request.
