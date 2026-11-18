@@ -1,12 +1,18 @@
-# Hue Shift v0.1.3
+# Hue Shift v0.1.4
 
 Generate 3–16 colors with a Center Color, six Hue Shift styles (including Zigzag), Hue Strength and HSV Color Map. Append the ramp to the active Sprite palette without recoloring pixels.
+
+## v0.1.4 fix
+
+- Removed the arbitrary 256-slot palette append restriction. The Ramp generator does not impose a palette size cap.
+- Add to Palette attempts to extend the sprite palette and reports Aseprite API errors if the operation is not supported.
+- All other Ramp generation and startup update behavior is unchanged.
 
 ## Built-in automatic updates (Windows)
 
 **No Scheduled Task, Windows Startup shortcut, launcher, or separate updater installation.**
 
-1. Install the v0.1.3 `.aseprite-extension` package once via **Edit → Preferences → Extensions → Add Extension**, then restart Aseprite.
+1. Install the v0.1.4 `.aseprite-extension` package once via **Edit → Preferences → Extensions → Add Extension**, then restart Aseprite.
 2. Ensure GitHub CLI (`gh`) is installed and authenticated to your private GitHub repository: `gh auth login`.
 3. The Aseprite plugin's `init(plugin)` launches `src/autoupdate.ps1` in the background on every Aseprite startup.
 4. If a newer stable `hue-shift-vX.Y.Z` Release exists, the updater downloads the package and SHA256 checksum, verifies them and replaces its own installed files.

@@ -1,4 +1,4 @@
--- MeowMoon Hue Shift v0.1.3
+-- MeowMoon Hue Shift v0.1.4
 -- Check private GitHub Releases on startup. No Task Scheduler.
 function init(plugin)
   local root = plugin.path
