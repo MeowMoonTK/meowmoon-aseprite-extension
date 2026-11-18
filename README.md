@@ -4,7 +4,7 @@ Private monorepo for independent Aseprite extensions.
 
 | Extension | Status | Source |
 | --- | --- | --- |
-| Hue Shift | v0.1.0 | [extensions/hue-shift](extensions/hue-shift) |
+| Hue Shift | v0.1.4 | [extensions/hue-shift](extensions/hue-shift) |
 
 Each directory inside `extensions/` is an independent extension with its own Aseprite `package.json`, implementation, tests, and release version.
 
