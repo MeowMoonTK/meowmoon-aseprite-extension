@@ -1,0 +1,1 @@
+# meowmoon-aseprite-extension
