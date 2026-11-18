@@ -16,6 +16,7 @@ paths = [
     "src/color.lua",
     "src/ramp.lua",
     "src/palette.lua",
+    "src/wheel.lua",
     "src/dialog.lua",
 ]
 with ZipFile(out, "w", compression=ZIP_DEFLATED) as archive:

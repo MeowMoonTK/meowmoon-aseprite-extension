@@ -5,12 +5,14 @@ on:
     paths:
       - "extensions/hue-shift/**"
       - "tests/test_hue_shift.lua"
+      - "tests/test_wheel.lua"
       - "scripts/build_hue_shift.py"
       - ".github/workflows/hue-shift.yml"
   pull_request:
     paths:
       - "extensions/hue-shift/**"
       - "tests/test_hue_shift.lua"
+      - "tests/test_wheel.lua"
       - "scripts/build_hue_shift.py"
       - ".github/workflows/hue-shift.yml"
   workflow_dispatch:
@@ -28,7 +30,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y lua5.4
       - name: Run Lua regression tests
-        run: lua5.4 tests/test_hue_shift.lua
+        run: |
+          lua5.4 tests/test_hue_shift.lua
+          lua5.4 tests/test_wheel.lua
       - name: Build Aseprite extension
         run: python3 scripts/build_hue_shift.py
       - name: Validate extension archive
@@ -40,12 +44,11 @@ jobs:
           with zipfile.ZipFile(path) as archive:
               assert all(name in archive.namelist() for name in (
                 "package.json", "main.lua", "src/color.lua", "src/ramp.lua",
-                "src/palette.lua", "src/dialog.lua"))
+                "src/palette.lua", "src/wheel.lua", "src/dialog.lua"))
               manifest=json.loads(archive.read("package.json"))
-              assert manifest["version"]=="0.1.0"
+              assert manifest["version"]=="0.1.1"
               assert manifest["contributes"]["scripts"][0]["path"]=="./main.lua"
           print("Valid:",path)
           PY
-      # Artifact upload is deliberately disabled: this private account's
-      # GitHub Actions artifact storage quota is currently exhausted.
+      # Artifact upload disabled due to private account Actions storage quota.
       # Build locally with: python3 scripts/build_hue_shift.py

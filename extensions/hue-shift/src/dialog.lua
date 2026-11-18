@@ -1,7 +1,7 @@
--- Simple native Aseprite dialog: one Color Ramp generator, no sprite recoloring.
+-- Native Aseprite Color Ramp dialog with HSV wheel overview.
 local M = {}
 
-function M.open(ramp, paletteWriter)
+function M.open(ramp, paletteWriter, wheel)
   if not app.isUIAvailable then return end
 
   local picked = app.fgColor
@@ -13,6 +13,8 @@ function M.open(ramp, paletteWriter)
     strength = 50
   }
   local preview, anchor = ramp.generate(opts)
+  -- Wheel pixels are computed once; repaint only the dots and path.
+  local wheelImage = wheel.make_image(80)
   local dlg = Dialog{ title = "MeowMoon Hue Shift" }
 
   local function recompute()
@@ -47,9 +49,13 @@ function M.open(ramp, paletteWriter)
   }
   dlg:slider{
     id = "strength",
-    label = "Strength:",
+    label = "Hue Strength:",
     min = 0, max = 100, value = 50,
     onchange = recompute
+  }
+  dlg:label{
+    label = "Strength:",
+    text = "0% = no Hue shift; 100% = full style rotation"
   }
   dlg:canvas{
     id = "preview",
@@ -60,11 +66,9 @@ function M.open(ramp, paletteWriter)
     onpaint = function(ev)
       local gc = ev.context
       local count = #preview
-      local gutter = 6
-      local gap = 2
+      local gutter, gap = 6, 2
       local usable = gc.width - gutter * 2
       local y, h = 7, 36
-
       for i, rgb in ipairs(preview) do
         local left = gutter + math.floor((i - 1) * usable / count)
         local right = gutter + math.floor(i * usable / count)
@@ -76,11 +80,20 @@ function M.open(ramp, paletteWriter)
           gc:strokeRect(Rectangle(left, y, math.max(1, right-left-gap), h))
         end
       end
-
       gc.color = Color{ r = 190, g = 190, b = 190 }
       gc:fillText("Shadow", gutter, 49)
       gc:fillText("Anchor #" .. anchor, math.floor(gc.width * 0.42), 49)
       gc:fillText("Light", gc.width - 45, 49)
+    end
+  }
+  dlg:canvas{
+    id = "hue_wheel",
+    label = "Color Map:",
+    width = 360,
+    height = 201,
+    autoscaling = true,
+    onpaint = function(ev)
+      wheel.paint(ev.context, wheelImage, preview, anchor)
     end
   }
   dlg:label{
@@ -92,7 +105,6 @@ function M.open(ramp, paletteWriter)
     id = "apply",
     text = "Add to Palette",
     onclick = function()
-      -- Resolve active sprite at the moment of applying, not when opening.
       local ok, message = paletteWriter.append(app.sprite, preview)
       dlg:modify{ id = "status", text = message }
       if not ok then app.alert{ title = "Hue Shift", text = message } end
