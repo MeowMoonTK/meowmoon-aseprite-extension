@@ -38,6 +38,7 @@ os.execute = execute
 app.isUIAvailable = true
 app.os.windows = false
 app.fgColor = { red=100, green=120, blue=140 }
+app.pixelColor = { rgba = function() return 0 end }
 Color = function(c) return c end
 ColorMode = { RGB = 0 }
 Image = function(w, h) return { width=w, height=h, drawPixel=function() end } end
