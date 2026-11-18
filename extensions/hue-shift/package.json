@@ -2,7 +2,7 @@
   "name": "meowmoon-hue-shift",
   "displayName": "MeowMoon Hue Shift",
   "description": "Generate a color ramp with six hue-shift styles and a hue/saturation wheel.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": { "name": "MeowMoonTK" },
   "categories": ["Scripts"],
   "contributes": {

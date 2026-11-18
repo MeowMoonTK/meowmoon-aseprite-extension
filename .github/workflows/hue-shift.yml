@@ -46,9 +46,36 @@ jobs:
                 "package.json", "main.lua", "src/color.lua", "src/ramp.lua",
                 "src/palette.lua", "src/wheel.lua", "src/dialog.lua"))
               manifest=json.loads(archive.read("package.json"))
-              assert manifest["version"]=="0.1.1"
+              assert path.name==f'hue-shift-{manifest["version"]}.aseprite-extension'
               assert manifest["contributes"]["scripts"][0]["path"]=="./main.lua"
           print("Valid:",path)
           PY
-      # Artifact upload disabled due to private account Actions storage quota.
-      # Build locally with: python3 scripts/build_hue_shift.py
+      # Actions artifact uploads disabled due to the account's storage quota.
+
+  release:
+    needs: validate-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create private versioned release (if not yet published)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("extensions/hue-shift/package.json"))["version"])')
+          tag="hue-shift-v${version}"
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release already exists: ${tag}"
+            exit 0
+          fi
+          python3 scripts/build_hue_shift.py
+          asset="dist/hue-shift-${version}.aseprite-extension"
+          sha="dist/hue-shift-${version}.sha256"
+          ( cd dist && sha256sum "hue-shift-${version}.aseprite-extension" > "hue-shift-${version}.sha256" )
+          gh release create "${tag}" "${asset}" "${sha}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "Hue Shift v${version}" \
+            --notes "Private Aseprite Hue Shift extension. Includes SHA256 checksum for the Windows updater."
