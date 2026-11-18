@@ -61,6 +61,8 @@ jobs:
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           '{"name":"meowmoon-hue-shift","version":"0.1.3"}' | Set-Content -LiteralPath (Join-Path $target "package.json") -Encoding UTF8
           & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'extensions/hue-shift/src/autoupdate.ps1' -InstallDir $target
+          $log = Join-Path $env:LOCALAPPDATA 'MeowMoon\HueShift\update.log'
+          if (Test-Path $log) { Get-Content $log -Tail 20 }
           if ($LASTEXITCODE -ne 0) { throw 'Public update check failed' }
           $installed = Get-Content (Join-Path $target 'package.json') -Raw | ConvertFrom-Json
           if ([version]$installed.version -le [version]'0.1.3') { throw 'A newer public Release was not installed' }
