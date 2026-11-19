@@ -1,4 +1,5 @@
--- All styles use the same lightness/chroma ramp; only hue placement varies.
+-- Hue style sets hue direction; Step Mode controls how far each ramp
+-- color travels along the shadow/highlight path.
 return function(colorMath)
   local M = {}
 
@@ -9,6 +10,14 @@ return function(colorMath)
     "Clockwise",
     "Counterclockwise",
     "Zigzag"
+  }
+
+  M.stepModes = {
+    "Balanced",
+    "Full Range",
+    "Shadow Detail",
+    "Highlight Detail",
+    "Soft Ends"
   }
 
   local function shortest_hue_delta(startHue, targetHue)
@@ -23,7 +32,7 @@ return function(colorMath)
     elseif style == "Counterclockwise" then
       return -x * 80 * strength
     elseif style == "Zigzag" then
-      -- Alternate the direction on each successive step away from the anchor.
+      -- Zigzag alternates direction per actual palette step, not interpolated distance.
       local sign = stepsFromAnchor % 2 == 1 and -1 or 1
       return sign * 80 * distance * strength
     elseif style == "Warm Light / Cool Shadow"
@@ -39,6 +48,18 @@ return function(colorMath)
     error("Unknown Hue Shift style: " .. tostring(style))
   end
 
+  local function step_progress(mode, t, shadow)
+    if (mode == "Shadow Detail" and shadow)
+        or (mode == "Highlight Detail" and not shadow) then
+      -- Reach deeper into the side early, reserving more samples at the endpoint.
+      return 1 - (1 - t) ^ 2
+    elseif mode == "Soft Ends" then
+      -- Concentrate colors close to the anchor and both endpoints.
+      return t * t * (3 - 2 * t)
+    end
+    return t
+  end
+
   function M.generate(opts)
     assert(type(opts) == "table", "options table expected")
     local n = assert(tonumber(opts.count), "count is required")
@@ -46,32 +67,56 @@ return function(colorMath)
     local power = assert(tonumber(opts.strength), "strength is required") / 100
     assert(power >= 0 and power <= 1, "strength must be 0..100")
 
+    local mode = opts.stepMode or "Balanced"
+    local knownMode = false
+    for _, name in ipairs(M.stepModes) do
+      if name == mode then knownMode = true; break end
+    end
+    assert(knownMode, "Unknown Step Mode: " .. tostring(mode))
+
     local center = assert(opts.center, "center color required")
     local rgb = {
       r = assert(center.r), g = assert(center.g), b = assert(center.b)
     }
     local base = colorMath.rgb_to_oklch(rgb)
     local anchor = math.floor((n + 1) / 2) -- even counts: left-middle cell
+    local leftSteps, rightSteps = anchor - 1, n - anchor
+
+    -- Balance the OKLab lightness step on both sides, rather than scaling
+    -- shadow by base.L and highlight by (1 - base.L) independently.
+    -- Near pure black/white, an exactly symmetric range would collapse to
+    -- zero. Fade back toward the available full range at those extremes.
+    local nativeShadowStep = 0.80 * base.L / leftSteps
+    local nativeHighlightStep = 0.80 * (1 - base.L) / rightSteps
+    local minStep = math.min(nativeShadowStep, nativeHighlightStep)
+    local maxStep = math.max(nativeShadowStep, nativeHighlightStep)
+    local balance = maxStep > 0 and math.min(1, 4 * minStep / maxStep) or 0
+    local shadowStep = nativeShadowStep * (1 - balance) + minStep * balance
+    local highlightStep = nativeHighlightStep * (1 - balance) + minStep * balance
     local result = {}
     for i = 1, n do
       if i == anchor then
         -- The source RGB is copied byte-for-byte, not round-tripped.
         result[i] = { r = rgb.r, g = rgb.g, b = rgb.b }
       else
+        local shadow = i < anchor
         local steps = math.abs(i - anchor)
-        local sideSpan = i < anchor and (anchor - 1) or (n - anchor)
-        local d = steps / sideSpan
-        local x = (i < anchor and -1 or 1) * d
+        local sideSteps = shadow and leftSteps or rightSteps
+        local t = steps / sideSteps
+        local d = step_progress(mode, t, shadow)
+        local sign = shadow and -1 or 1
 
-        -- Adapt the range to the anchor so extreme colors never overshoot.
         local L
-        if i < anchor then
-          L = base.L * (1 - 0.80 * d)
+        if mode == "Full Range" then
+          -- Original behavior for comparison: each side extends independently.
+          local headroom = shadow and base.L or (1 - base.L)
+          L = base.L + sign * 0.80 * headroom * d
         else
-          L = base.L + (1 - base.L) * 0.80 * d
+          local stepL = shadow and shadowStep or highlightStep
+          L = base.L + sign * stepL * sideSteps * d
         end
         local C = base.C * (1 - 0.18 * d)
-        local h = (base.h + hue_shift(opts.style, base.h, x, d, power, steps)) % 360
+        local h = (base.h + hue_shift(opts.style, base.h, sign * d, d, power, steps)) % 360
         result[i] = colorMath.oklch_to_rgb(L, C, h)
       end
     end
