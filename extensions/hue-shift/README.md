@@ -1,4 +1,4 @@
-# MeowMoon Hue Shift v0.1.6 (source)
+# MeowMoon Hue Shift v0.1.7 (source)
 
 Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, independent Step Modes, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
 
@@ -18,6 +18,18 @@ Brightness is measured as the source color's **grayscale-equivalent sRGB value**
 
 Step Mode now controls the **grayscale value of each final RGB color** (0–255 Rec.709 luminance encoded as sRGB), rather than dividing OKLab L. Each color's Hue and intended Chroma still follow the original Shift Style. The generator searches for an OKLab L that produces the target gray after sRGB gamut mapping, reducing Chroma when necessary. The original RGB stays untouched at the anchor. Balanced prioritizes uniform grayscale increments over reaching the darkest and lightest possible endpoints; at 8-bit precision individual steps may differ by a fraction of a gray level.
 
+## Auto-update reliability and diagnostics (v0.1.7)
+
+The automatic Windows updater now launches one second after the Aseprite GUI event loop starts, not during extension initialization. This allows Aseprite to display its security permission prompt normally.
+
+To check manually, use **Hue Shift > Check Updates** in the ramp panel or **File > Scripts > Hue Shift: Check Updates**. This runs PowerShell synchronously, reports the real result, and shows the log location.
+
+To enable unattended startup checks, accept Aseprite's execute permission prompt for the script. For persistent permission, choose **Give full trust to this script** and **Give Script Full Access**. If the permission is rejected, the color ramp continues to work but automatic updates cannot launch.
+
+A successful background command launch does **not** prove an update was installed; confirm the installed version after restarting Aseprite, or look for the installation message in the update log. Log location: `%LOCALAPPDATA%\MeowMoon\HueShift\update.log`.
+
+**Migration:** Aseprite installations running v0.1.5/v0.1.6 do not contain this new diagnostic UI. The source changes are in v0.1.7 only; the release is not yet built. If auto-update from those versions never launches, they cannot bootstrap a later repair without a manual check or installation.
+
 ## Update check at Aseprite startup (Windows)
 
 1. Install a package containing this new updater (v0.1.5) once through **Edit > Preferences > Extensions > Add Extension**.
@@ -27,7 +39,7 @@ Step Mode now controls the **grayscale value of each final RGB color** (0–255 
 
 **No GitHub CLI, token, login, Task Scheduler, Windows Startup task, or launcher.** PowerShell 5.1 is included in Windows.
 
-Aseprite may ask permission to use `os.execute` on the first run. Allow this trusted extension so it can launch the check. Internet or GitHub errors never interrupt ramp generation. Diagnostic log: `%LOCALAPPDATA%\MeowMoon\HueShift\update.log`.
+Aseprite may ask permission to use `os.execute` on the first run. Internet or GitHub errors never interrupt ramp generation; see the diagnostic section above.
 
 **Migration:** Versions 0.1.3 and 0.1.4 were published with a GitHub CLI-dependent updater. If `gh` is unavailable, they cannot automatically bootstrap the new HTTPS updater. Install [v0.1.5](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.5) manually once; subsequent releases will be checked automatically.
 
