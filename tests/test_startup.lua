@@ -1,63 +1,96 @@
--- The extension only launches the public Release check in Windows UI mode.
-local execute = os.execute
-local calls = {}
-os.execute = function(command)
-  calls[#calls + 1] = command
-  return true, "exit", 0
+-- Simulate the Aseprite GUI, including deferred startup Timer.
+local oldExecute=os.execute
+local oldOpen=io.open
+local calls={}
+os.execute=function(command)
+  calls[#calls+1]=command
+  return true,"exit",0
 end
-
-app = {
-  isUIAvailable = true,
-  os = { windows = true },
-  fs = { joinPath = function(...) return table.concat({...}, "/") end }
+local tick
+Timer=function(spec)
+  assert(spec.interval==1.0)
+  local timer={}
+  function timer:start() tick=spec.ontick end
+  function timer:stop() end
+  return timer
+end
+app={
+  isUIAvailable=true,
+  os={windows=true},
+  fs={joinPath=function(...)return table.concat({...},"/")end},
+  alert=function()end
 }
-local plugin = {
-  path = "extensions/hue-shift",
-  version = "0.1.5",
-  newCommand = function(_, spec)
-    assert(spec.id == "MeowMoonGenerateHueShiftRamp")
-    assert(type(spec.onclick) == "function")
-  end
+local commands={}
+local plugin={
+  path="extensions/hue-shift",version="0.1.7",
+  newCommand=function(_,spec)commands[spec.id]=spec end
 }
-
 dofile("extensions/hue-shift/main.lua")
 init(plugin)
-assert(#calls == 1 and calls[1]:find("autoupdate.ps1", 1, true))
-assert(calls[1]:find('-InstallDir "extensions/hue-shift"', 1, true))
-assert(not calls[1]:find("gh auth", 1, true))
-app.os.windows = false
+assert(#calls==0,"Startup check should wait for Aseprite UI")
+assert(type(tick)=="function")
+tick()
+assert(#calls==1)
+assert(calls[1]:find('cmd.exe /d /c start',1,true))
+assert(calls[1]:find('autoupdate.ps1" -InstallDir "extensions/hue-shift"',1,true))
+assert(commands.MeowMoonCheckHueShiftUpdates)
+app.os.windows=false
 init(plugin)
-assert(#calls == 1, "No Windows PowerShell on other platforms.")
-app.os.windows = true
-app.isUIAvailable = false
+assert(#calls==1,"Do not run Windows updater on other platforms")
+app.os.windows=true
+app.isUIAvailable=false
 init(plugin)
-assert(#calls == 1, "No updater in headless mode.")
-os.execute = execute
+assert(#calls==1,"Do not run updater in headless mode")
+os.execute=oldExecute
 
--- Inspect the visible panel footer with Aseprite-compatible dialog mocks.
-app.isUIAvailable = true
-app.os.windows = false
-app.fgColor = { red=100, green=120, blue=140 }
-app.pixelColor = { rgba = function() return 0 end }
-Color = function(c) return c end
-ColorMode = { RGB = 0 }
-Image = function(w, h) return { width=w, height=h, drawPixel=function() end } end
+-- Manual check must report a nonzero PowerShell exit code.
+io.open=function()return nil end
+local updater=dofile("extensions/hue-shift/src/update.lua")("extensions/hue-shift")
+local manualCommand
+os.execute=function(cmd)
+  manualCommand=cmd
+  return nil,"exit",5
+end
+local ok,message=updater.checkNow()
+assert(not ok and message:find("failed",1,true))
+assert(manualCommand:find("powershell.exe",1,true))
+assert(not manualCommand:find("cmd.exe /d /c start",1,true))
+os.execute=oldExecute
+io.open=oldOpen
 
-local shownVersion
-Dialog = function()
-  local dlg = { data = {} }
+-- The extension still shows its installed version and a manual update control.
+app.isUIAvailable=true
+app.os.windows=true
+app.fgColor={red=100,green=120,blue=140}
+app.pixelColor={rgba=function()return 0 end}
+Color=function(c)return c end
+ColorMode={RGB=0}
+Image=function(w,h)return{width=w,height=h,drawPixel=function()end}end
+local versionShown,checkButton,updateText
+Dialog=function()
+  local dlg={data={}}
   function dlg:label(spec)
-    if spec.label == "Version:" then shownVersion = spec.text end
+    if spec.label=="Version:" then versionShown=spec.text end
+    if spec.id=="update_status" then updateText=spec.text end
     return self
   end
-  return setmetatable(dlg, { __index = function() return function(self) return self end end })
+  function dlg:button(spec)
+    if spec.id=="update" then checkButton=spec.onclick end
+    return self
+  end
+  return setmetatable(dlg,{__index=function()
+    return function(self)return self end
+  end})
 end
-
-local command
-plugin.newCommand = function(_, spec) command = spec end
+local oldStart=os.execute
+local count=0
+os.execute=function(cmd)count=count+1;return true,"exit",0 end
 init(plugin)
-assert(type(command.onclick) == "function")
-command.onclick()
-assert(shownVersion == "v0.1.5", "The panel must display the package version.")
-
-print("OK: release check launched on Windows UI startup, panel version from manifest")
+commands.MeowMoonGenerateHueShiftRamp.onclick()
+assert(versionShown=="v0.1.7")
+assert(type(checkButton)=="function" and type(updateText)=="string")
+assert(count==0,"Timer should not trigger until tick")
+tick()
+assert(count==1)
+os.execute=oldStart
+print("OK: delayed startup, manual exit-code diagnostics and version panel")
