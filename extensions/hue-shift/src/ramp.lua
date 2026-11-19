@@ -82,13 +82,17 @@ return function(colorMath)
     local anchor = math.floor((n + 1) / 2) -- even counts: left-middle cell
     local leftSteps, rightSteps = anchor - 1, n - anchor
 
-    -- In Balanced modes, the same OKLab Lightness increment is used for
-    -- each step on either side. This prevents a bright anchor from making
-    -- shadow steps much larger than highlight steps (or the reverse).
-    -- Full Range keeps the old independently scaled end-to-end lightness.
-    local evenStep = 0.80 * math.min(
-      base.L / leftSteps, (1 - base.L) / rightSteps
-    )
+    -- Balance the OKLab lightness step on both sides, rather than scaling
+    -- shadow by base.L and highlight by (1 - base.L) independently.
+    -- Near pure black/white, an exactly symmetric range would collapse to
+    -- zero. Fade back toward the available full range at those extremes.
+    local nativeShadowStep = 0.80 * base.L / leftSteps
+    local nativeHighlightStep = 0.80 * (1 - base.L) / rightSteps
+    local minStep = math.min(nativeShadowStep, nativeHighlightStep)
+    local maxStep = math.max(nativeShadowStep, nativeHighlightStep)
+    local balance = maxStep > 0 and math.min(1, 4 * minStep / maxStep) or 0
+    local shadowStep = nativeShadowStep * (1 - balance) + minStep * balance
+    local highlightStep = nativeHighlightStep * (1 - balance) + minStep * balance
     local result = {}
     for i = 1, n do
       if i == anchor then
@@ -108,7 +112,8 @@ return function(colorMath)
           local headroom = shadow and base.L or (1 - base.L)
           L = base.L + sign * 0.80 * headroom * d
         else
-          L = base.L + sign * evenStep * sideSteps * d
+          local stepL = shadow and shadowStep or highlightStep
+          L = base.L + sign * stepL * sideSteps * d
         end
         local C = base.C * (1 - 0.18 * d)
         local h = (base.h + hue_shift(opts.style, base.h, sign * d, d, power, steps)) % 360
