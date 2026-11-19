@@ -1,7 +1,7 @@
 -- Native Aseprite Color Ramp dialog with HSV wheel overview.
 local M = {}
 
-function M.open(ramp, paletteWriter, wheel, version)
+function M.open(ramp, paletteWriter, wheel, version, updater)
   if not app.isUIAvailable then return end
 
   local picked = app.fgColor
@@ -113,6 +113,26 @@ function M.open(ramp, paletteWriter, wheel, version)
   dlg:label{
     label = "Version:",
     text = "v" .. tostring(version or "unknown")
+  }
+  if updater and app.os and app.os.windows then
+    dlg:label{
+      id = "update_status",
+      label = "Updates:",
+      text = updater.launchStatus
+    }
+    dlg:button{
+      id = "update",
+      text = "Check Updates",
+      onclick = function()
+        dlg:modify{ id = "update_status", text = "Checking releases..." }
+        local ok, message = updater.checkNow()
+        dlg:modify{ id = "update_status", text = ok and "Check finished" or "Update failed" }
+        app.alert{
+          title = ok and "Hue Shift Update Check" or "Hue Shift Update Error",
+          text = message .. "\nLog: " .. updater.logPath
+        }
+      end
+    }
   }
   dlg:button{
     id = "apply",
