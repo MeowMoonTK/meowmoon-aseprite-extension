@@ -79,7 +79,14 @@ return function(colorMath)
       r = assert(center.r), g = assert(center.g), b = assert(center.b)
     }
     local base = colorMath.rgb_to_oklch(rgb)
-    local anchor = math.floor((n + 1) / 2) -- even counts: left-middle cell
+    -- With even counts the source occupies one of the two middle slots.
+    -- Compare its grayscale equivalent with neutral 50% gray (#808080):
+    -- dark sources get more highlight slots (left-middle anchor); light
+    -- sources get more shadow slots (right-middle anchor).
+    local anchor = math.floor((n + 1) / 2)
+    if n % 2 == 0 and colorMath.rgb_to_grayscale(rgb) >= 128 then
+      anchor = anchor + 1
+    end
     local leftSteps, rightSteps = anchor - 1, n - anchor
 
     -- Balance the OKLab lightness step on both sides, rather than scaling
