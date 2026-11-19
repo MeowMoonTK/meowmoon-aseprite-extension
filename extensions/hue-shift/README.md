@@ -10,7 +10,7 @@ Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, indep
 - **Highlight Detail:** Balanced endpoints, but places more shades near the brightest endpoint.
 - **Soft Ends:** Balanced endpoints with eased spacing near the center and both extremes, stronger differences in between.
 
-Step Mode remaps each step's lightness, chroma, and hue progression together, while Shift Style controls hue direction. Balanced equalizes the lightness component, not necessarily the entire color difference when Hue Shift varies between sides.
+Step Mode adjusts **only Lightness (OKLab L)**. Hue and Chroma progression do not change when switching Step Modes; Shift Style controls hue direction. With a fixed-position center color, Balanced equalizes brightness increments by reducing the available tonal range on the side with more headroom instead of preserving both extreme endpoints.
 
 ## Update check at Aseprite startup (Windows)
 

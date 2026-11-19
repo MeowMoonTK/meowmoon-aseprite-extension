@@ -110,6 +110,55 @@ local fromWhite = ramp.generate{
 assert(lightness(fromWhite[1]) < 0.5,
   "Balanced must not collapse the dark side of a white-centered ramp")
 
+
+-- The screenshot had roughly 4x stronger OKLab Lightness steps
+-- in shadows than highlights. Balanced must remove that disparity.
+local screenshotAnchor = {r=175, g=179, b=129}
+local screenshotOut, screenshotMid = ramp.generate{
+  center=screenshotAnchor, count=8, strength=50,
+  style="Monochromatic", stepMode="Balanced"
+}
+local minDiff, maxDiff = math.huge, 0
+for i=2,#screenshotOut do
+  local diff = lightness(screenshotOut[i]) - lightness(screenshotOut[i-1])
+  assert(diff > 0, "Balanced must increase Lightness.")
+  minDiff = math.min(minDiff, diff)
+  maxDiff = math.max(maxDiff, diff)
+end
+assert(maxDiff / minDiff < 1.15,
+  "Balanced should not have the screenshot's 4x dark/light disparity.")
+assert(screenshotOut[screenshotMid].r==screenshotAnchor.r
+   and screenshotOut[screenshotMid].g==screenshotAnchor.g
+   and screenshotOut[screenshotMid].b==screenshotAnchor.b)
+
+-- Capture input OKLCH values (before gamut compression) to ensure
+-- that switching Step Mode changes ONLY Lightness, not Hue or Chroma.
+local testMath = {
+  rgb_to_oklch = function() return {L=0.72,C=0.05,h=150} end,
+  oklch_to_rgb = function(L,C,h) return {r=L,g=C,b=h} end
+}
+local pureRamp = dofile("extensions/hue-shift/src/ramp.lua")(testMath)
+for _, style in ipairs(pureRamp.styles) do
+  local reference, anchorIndex = pureRamp.generate{
+    center={r=120,g=150,b=80},count=9,strength=70,
+    style=style,stepMode="Balanced"
+  }
+  for _, mode in ipairs(pureRamp.stepModes) do
+    local result = pureRamp.generate{
+      center={r=120,g=150,b=80},count=9,strength=70,
+      style=style,stepMode=mode
+    }
+    for i=1,#result do
+      if i~=anchorIndex then
+        assert(near(result[i].g,reference[i].g,1e-10),
+          "Step Mode must not change Chroma: "..mode)
+        assert(near(result[i].b,reference[i].b,1e-10),
+          "Step Mode must not change Hue: "..mode)
+      end
+    end
+  end
+end
+
 -- Palette writer tests using Aseprite-compatible mocks.
 local function makePalette(size)
   local pal = { size=size, entries={} }
