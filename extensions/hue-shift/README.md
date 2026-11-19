@@ -1,6 +1,16 @@
-# MeowMoon Hue Shift v0.1.5
+# MeowMoon Hue Shift v0.1.6 (source)
 
-Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
+Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, independent Step Modes, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
+
+## Step Mode (independent of Shift Style)
+
+- **Balanced (default):** equal OKLab Lightness spacing per step on both sides of the center, within the smaller available range; avoids disproportionately strong shadow steps.
+- **Full Range:** original independent shadow/highlight ranges, useful when stronger extremes are wanted.
+- **Shadow Detail:** Balanced endpoints, but places more intermediate shades near the darkest endpoint.
+- **Highlight Detail:** Balanced endpoints, but places more shades near the brightest endpoint.
+- **Soft Ends:** Balanced endpoints with eased spacing near the center and both extremes, stronger differences in between.
+
+Step Mode remaps each step's lightness, chroma, and hue progression together, while Shift Style controls hue direction. Balanced equalizes the lightness component, not necessarily the entire color difference when Hue Shift varies between sides.
 
 ## Update check at Aseprite startup (Windows)
 

@@ -10,6 +10,7 @@ function M.open(ramp, paletteWriter, wheel, version)
     center = center,
     count = 7,
     style = "Warm Light / Cool Shadow",
+    stepMode = "Balanced",
     strength = 50
   }
   local preview, anchor = ramp.generate(opts)
@@ -23,6 +24,7 @@ function M.open(ramp, paletteWriter, wheel, version)
     opts.center = { r = c.red, g = c.green, b = c.blue }
     opts.count = data.count
     opts.style = data.style
+    opts.stepMode = data.step_mode
     opts.strength = data.strength
     preview, anchor = ramp.generate(opts)
     dlg:repaint()
@@ -45,6 +47,13 @@ function M.open(ramp, paletteWriter, wheel, version)
     label = "Shift Style:",
     options = ramp.styles,
     option = opts.style,
+    onchange = recompute
+  }
+  dlg:combobox{
+    id = "step_mode",
+    label = "Step Mode:",
+    options = ramp.stepModes,
+    option = opts.stepMode,
     onchange = recompute
   }
   dlg:slider{
