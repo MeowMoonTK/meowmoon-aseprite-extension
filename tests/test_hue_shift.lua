@@ -94,6 +94,22 @@ for i, c in ipairs(implicit) do
   assert(c.r==balanced[i].r and c.g==balanced[i].g and c.b==balanced[i].b)
 end
 
+
+-- A symmetric range is impossible when the source is pure black or white.
+-- Balanced must still produce useful colors on the side with headroom.
+local fromBlack = ramp.generate{
+  center={r=0,g=0,b=0}, count=9, strength=0,
+  style="Monochromatic", stepMode="Balanced"
+}
+assert(lightness(fromBlack[9]) > 0.5,
+  "Balanced must not collapse the bright side of a black-centered ramp")
+local fromWhite = ramp.generate{
+  center={r=255,g=255,b=255}, count=9, strength=0,
+  style="Monochromatic", stepMode="Balanced"
+}
+assert(lightness(fromWhite[1]) < 0.5,
+  "Balanced must not collapse the dark side of a white-centered ramp")
+
 -- Palette writer tests using Aseprite-compatible mocks.
 local function makePalette(size)
   local pal = { size=size, entries={} }
