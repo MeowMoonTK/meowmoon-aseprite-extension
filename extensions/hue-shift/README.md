@@ -10,13 +10,13 @@ Brightness is measured as the source color's **grayscale-equivalent sRGB value**
 
 ## Step Mode (independent of Shift Style)
 
-- **Balanced (default):** equal OKLab Lightness spacing on both sides for ordinary center colors; adaptively preserves usable range near black and white.
-- **Full Range:** original independent shadow/highlight ranges, useful when stronger extremes are wanted.
-- **Shadow Detail:** Balanced endpoints, but places more intermediate shades near the darkest endpoint.
-- **Highlight Detail:** Balanced endpoints, but places more shades near the brightest endpoint.
-- **Soft Ends:** Balanced endpoints with eased spacing near the center and both extremes, stronger differences in between.
+- **Balanced (default):** nearly equal measured **sRGB grayscale brightness** increments across dark and light sides, with adaptive headroom near black and white.
+- **Full Range:** each side independently uses 80% of its available grayscale brightness range; produces wider extremes but less uniform increments.
+- **Shadow Detail:** Balanced grayscale range, with more values near the darkest endpoint.
+- **Highlight Detail:** Balanced grayscale range, with more values near the brightest endpoint.
+- **Soft Ends:** Eased grayscale spacing near the anchor and both extremes, stronger differences in between.
 
-Step Mode adjusts **only Lightness (OKLab L)**. Hue and Chroma progression do not change when switching Step Modes; Shift Style controls hue direction. With a fixed-position center color, Balanced equalizes brightness increments by reducing the available tonal range on the side with more headroom instead of preserving both extreme endpoints.
+Step Mode now controls the **grayscale value of each final RGB color** (0–255 Rec.709 luminance encoded as sRGB), rather than dividing OKLab L. Each color's Hue and intended Chroma still follow the original Shift Style. The generator searches for an OKLab L that produces the target gray after sRGB gamut mapping, reducing Chroma when necessary. The original RGB stays untouched at the anchor. Balanced prioritizes uniform grayscale increments over reaching the darkest and lightest possible endpoints; at 8-bit precision individual steps may differ by a fraction of a gray level.
 
 ## Update check at Aseprite startup (Windows)
 
