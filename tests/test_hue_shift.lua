@@ -35,14 +35,14 @@ for _, style in ipairs(ramp.styles) do
         end
         assert(anchor == expectedAnchor, "Anchor differs from grayscale midpoint")
         assert(out[anchor].r==base.r and out[anchor].g==base.g and out[anchor].b==base.b)
-        local lastL = -1
+        local lastGray = -1
         for _, rgb in ipairs(out) do
           for _, key in ipairs({"r","g","b"}) do
             assert(rgb[key] == math.floor(rgb[key]) and rgb[key]>=0 and rgb[key]<=255)
           end
-          local L = color.rgb_to_oklch(rgb).L
-          assert(L + 0.008 >= lastL, "Lightness was not monotonic")
-          lastL = L
+          local gray = color.rgb_to_grayscale(rgb)
+          assert(gray + 0.8 >= lastGray, "Output grayscale was not monotonic")
+          lastGray = gray
         end
           countCases = countCases + 1
         end
@@ -52,173 +52,170 @@ for _, style in ipairs(ramp.styles) do
 end
 
 
--- Step modes must alter measured OKLab lightness spacing, not just labels.
+-- Step Modes must change measured grayscale distribution, not just labels.
 local neutral = { r=180, g=180, b=180 }
-local function sample(mode)
+local function sample(mode, center, style, count, strength)
   return ramp.generate{
-    center=neutral, count=9, strength=50, style="Monochromatic", stepMode=mode
+    center=center or neutral, count=count or 9, strength=strength or 50,
+    style=style or "Monochromatic", stepMode=mode
   }
 end
-local function lightness(rgb)
-  return color.rgb_to_oklch(rgb).L
+local function gray(rgb)
+  return color.rgb_to_grayscale(rgb)
 end
 local balanced, middle = sample("Balanced")
-local old = sample("Full Range")
+local full = sample("Full Range")
 local dark = sample("Shadow Detail")
 local bright = sample("Highlight Detail")
 local smooth = sample("Soft Ends")
 assert(middle == 5)
-local deltaShadow = lightness(balanced[middle]) - lightness(balanced[middle-1])
-local deltaHighlight = lightness(balanced[middle+1]) - lightness(balanced[middle])
-assert(math.abs(deltaShadow - deltaHighlight) < 0.015,
-  "Balanced should use comparable lightness steps around the center")
-assert(lightness(old[1]) < lightness(balanced[1]),
-  "Full Range should keep the stronger shadow reach of the old algorithm")
-assert(lightness(dark[middle-1]) < lightness(balanced[middle-1]),
+local deltaShadow = gray(balanced[middle]) - gray(balanced[middle-1])
+local deltaHighlight = gray(balanced[middle+1]) - gray(balanced[middle])
+assert(math.abs(deltaShadow - deltaHighlight) < 1.5,
+  "Balanced should use comparable grayscale brightness steps around the center")
+assert(gray(full[1]) < gray(balanced[1]),
+  "Full Range should preserve a wider shadow reach")
+assert(gray(dark[middle-1]) < gray(balanced[middle-1]),
   "Shadow Detail should reserve more samples near the dark endpoint")
-assert(lightness(bright[middle+1]) > lightness(balanced[middle+1]),
-  "Highlight Detail should reserve more samples near the light endpoint")
-assert(lightness(smooth[middle-1]) > lightness(balanced[middle-1])
-   and lightness(smooth[middle+1]) < lightness(balanced[middle+1]),
-  "Soft Ends should have smaller color steps near the center")
+assert(gray(bright[middle+1]) > gray(balanced[middle+1]),
+  "Highlight Detail should reserve more samples near the bright endpoint")
+assert(gray(smooth[middle-1]) > gray(balanced[middle-1])
+   and gray(smooth[middle+1]) < gray(balanced[middle+1]),
+  "Soft Ends should have smaller gray steps near the center")
+
+-- Stable original RGB anchor and near-extreme headroom are important.
 for _, mode in ipairs(ramp.stepModes) do
-  local out, centerIndex = sample(mode)
-  assert(out[centerIndex].r==neutral.r and out[centerIndex].g==neutral.g
-      and out[centerIndex].b==neutral.b,
-    "Every Step Mode must preserve the original center RGB")
+  local out, middleIndex = sample(mode)
+  assert(out[middleIndex].r==neutral.r and out[middleIndex].g==neutral.g
+      and out[middleIndex].b==neutral.b, "Step Mode must preserve center RGB")
 end
-local okInvalid = pcall(ramp.generate, {
-  center=neutral, count=9, strength=50,
-  style="Monochromatic", stepMode="unknown"
-})
-assert(not okInvalid, "Unknown Step Mode must be rejected")
--- No explicit option must default to Balanced.
+assert(not pcall(ramp.generate, {
+  center=neutral,count=9,strength=50,style="Monochromatic",stepMode="unknown"
+}))
 local implicit = ramp.generate{center=neutral,count=9,strength=50,style="Monochromatic"}
-for i, c in ipairs(implicit) do
+for i,c in ipairs(implicit) do
   assert(c.r==balanced[i].r and c.g==balanced[i].g and c.b==balanced[i].b)
 end
+local fromBlack = sample("Balanced",{r=0,g=0,b=0})
+local fromWhite = sample("Balanced",{r=255,g=255,b=255})
+assert(gray(fromBlack[#fromBlack]) > 130, "Black-centered ramp lost highlights")
+assert(gray(fromWhite[1]) < 125, "White-centered ramp lost shadows")
 
-
--- A symmetric range is impossible when the source is pure black or white.
--- Balanced must still produce useful colors on the side with headroom.
-local fromBlack = ramp.generate{
-  center={r=0,g=0,b=0}, count=9, strength=0,
-  style="Monochromatic", stepMode="Balanced"
-}
-assert(lightness(fromBlack[9]) > 0.5,
-  "Balanced must not collapse the bright side of a black-centered ramp")
-local fromWhite = ramp.generate{
-  center={r=255,g=255,b=255}, count=9, strength=0,
-  style="Monochromatic", stepMode="Balanced"
-}
-assert(lightness(fromWhite[1]) < 0.5,
-  "Balanced must not collapse the dark side of a white-centered ramp")
-
-
--- The screenshot had roughly 4x stronger OKLab Lightness steps
--- in shadows than highlights. Balanced must remove that disparity.
-local screenshotAnchor = {r=175, g=179, b=129}
-local screenshotOut, screenshotMid = ramp.generate{
-  center=screenshotAnchor, count=8, strength=50,
-  style="Monochromatic", stepMode="Balanced"
-}
-local minDiff, maxDiff = math.huge, 0
-for i=2,#screenshotOut do
-  local diff = lightness(screenshotOut[i]) - lightness(screenshotOut[i-1])
-  assert(diff > 0, "Balanced must increase Lightness.")
-  minDiff = math.min(minDiff, diff)
-  maxDiff = math.max(maxDiff, diff)
+-- Screenshot regression: an 8-color bright olive source used to produce
+-- four-times larger grayscale steps in shadows than highlights.
+local screenshotAnchor = {r=175,g=179,b=129}
+local olive, anchorIndex = sample("Balanced",screenshotAnchor,"Monochromatic",8,50)
+local smallest, largest = math.huge, 0
+for i=2,#olive do
+  local difference = gray(olive[i]) - gray(olive[i-1])
+  assert(difference > 0, "Balanced grayscale steps must rise")
+  smallest = math.min(smallest,difference)
+  largest = math.max(largest,difference)
 end
-assert(maxDiff / minDiff < 1.15,
-  "Balanced should not have the screenshot's 4x dark/light disparity.")
-assert(screenshotOut[screenshotMid].r==screenshotAnchor.r
-   and screenshotOut[screenshotMid].g==screenshotAnchor.g
-   and screenshotOut[screenshotMid].b==screenshotAnchor.b)
+assert(largest / smallest < 1.10,
+  "Output grayscale must not repeat the 4x shadow/highlight disparity")
+assert(olive[anchorIndex].r==screenshotAnchor.r
+   and olive[anchorIndex].g==screenshotAnchor.g
+   and olive[anchorIndex].b==screenshotAnchor.b)
 
--- Capture input OKLCH values (before gamut compression) to ensure
--- that switching Step Mode changes ONLY Lightness, not Hue or Chroma.
-local testMath = {
-  rgb_to_oklch = function() return {L=0.72,C=0.05,h=150} end,
-  oklch_to_rgb = function(L,C,h) return {r=L,g=C,b=h} end
+-- Saturated hue changes and gamut compression must still meet target
+-- grayscale brightness, across both light and dark sides.
+local vivid = {
+  {r=240,g=25,b=20}, {r=15,g=210,b=35}, {r=25,g=35,b=240},
+  {r=250,g=200,b=10}, {r=95,g=35,b=185}, {r=50,g=150,b=155}
 }
-local pureRamp = dofile("extensions/hue-shift/src/ramp.lua")(testMath)
+for _, center in ipairs(vivid) do
+  for _, style in ipairs(ramp.styles) do
+    local output, anchor = sample("Balanced",center,style,8,100)
+    local gray0 = gray(center)
+    local leftSteps,rightSteps=anchor-1,#output-anchor
+    local ss=0.8*gray0/leftSteps
+    local hs=0.8*(255-gray0)/rightSteps
+    local minimum,maximum=math.min(ss,hs),math.max(ss,hs)
+    local balance=maximum>0 and math.min(1,4*minimum/maximum) or 0
+    ss=ss*(1-balance)+minimum*balance
+    hs=hs*(1-balance)+minimum*balance
+    for i,c in ipairs(output) do
+      local expected
+      if i<anchor then expected=gray0-(anchor-i)*ss
+      elseif i>anchor then expected=gray0+(i-anchor)*hs
+      else expected=gray0 end
+      assert(math.abs(gray(c)-expected)<1.5,
+        "RGB grayscale misses Step target at slot "..i.." for "..style)
+    end
+  end
+end
+
+-- Capture the OKLCH inputs before gamut mapping: switching Step Mode
+-- must not modify intended Hue or Chroma at any palette position.
+local testMath={
+  rgb_to_oklch=function() return {L=0.72,C=0.05,h=150} end,
+  rgb_to_grayscale=function(c)
+    return c.r > 1 and 180 or c.r * 255
+  end,
+  oklch_to_rgb=function(L,C,h) return {r=L,g=C,b=h} end
+}
+local pureRamp=dofile("extensions/hue-shift/src/ramp.lua")(testMath)
 for _, style in ipairs(pureRamp.styles) do
-  local reference, anchorIndex = pureRamp.generate{
+  local reference, anchor = pureRamp.generate{
     center={r=120,g=150,b=80},count=9,strength=70,
     style=style,stepMode="Balanced"
   }
   for _, mode in ipairs(pureRamp.stepModes) do
-    local result = pureRamp.generate{
+    local result=pureRamp.generate{
       center={r=120,g=150,b=80},count=9,strength=70,
       style=style,stepMode=mode
     }
     for i=1,#result do
-      if i~=anchorIndex then
-        assert(near(result[i].g,reference[i].g,1e-10),
-          "Step Mode must not change Chroma: "..mode)
-        assert(near(result[i].b,reference[i].b,1e-10),
-          "Step Mode must not change Hue: "..mode)
+      if i~=anchor then
+        assert(near(result[i].g,reference[i].g,1e-10),"Step Mode changed Chroma")
+        assert(near(result[i].b,reference[i].b,1e-10),"Step Mode changed Hue")
       end
     end
   end
 end
 
-
--- Grayscale placement for even palettes:
--- #808080 is the neutral reference; a bright source moves from 4 to 5
--- in an 8-color ramp to allow four shadows, a dark one stays at 4.
-local evenCases = {
-  {rgb={r=0,g=0,b=0}, expected=4},
-  {rgb={r=127,g=127,b=127}, expected=4},
-  {rgb={r=128,g=128,b=128}, expected=5},
-  {rgb={r=255,g=255,b=255}, expected=5},
-  -- Saturated colors use luminance-weighted grayscale, not raw RGB
-  -- channel average and not the hue/chroma of the source.
-  {rgb={r=255,g=0,b=0}, expected=4},
-  {rgb={r=0,g=255,b=0}, expected=5},
-  {rgb={r=0,g=0,b=255}, expected=4},
-  {rgb={r=175,g=179,b=129}, expected=5}
+-- Even counts switch the anchor by measured gray, odd counts do not.
+local evenCases={
+  {rgb={r=0,g=0,b=0},expected=4},
+  {rgb={r=127,g=127,b=127},expected=4},
+  {rgb={r=128,g=128,b=128},expected=5},
+  {rgb={r=255,g=255,b=255},expected=5},
+  {rgb={r=255,g=0,b=0},expected=4},
+  {rgb={r=0,g=255,b=0},expected=5},
+  {rgb={r=0,g=0,b=255},expected=4},
+  {rgb={r=175,g=179,b=129},expected=5}
 }
 for _, case in ipairs(evenCases) do
   for _, mode in ipairs(ramp.stepModes) do
-    local result, anchor = ramp.generate{
-      center=case.rgb,count=8,strength=50,
-      style="Warm Light / Cool Shadow",stepMode=mode
-    }
-    assert(anchor == case.expected,
-      "Wrong grayscale anchor for RGB " ..
-      case.rgb.r .. "," .. case.rgb.g .. "," .. case.rgb.b ..
-      " in " .. mode)
-    assert(result[anchor].r == case.rgb.r
-       and result[anchor].g == case.rgb.g
-       and result[anchor].b == case.rgb.b,
-      "The original RGB must remain unchanged at the selected anchor")
+    local result, anchor=sample(mode,case.rgb,"Warm Light / Cool Shadow",8,50)
+    assert(anchor==case.expected,"Grayscale anchor mismatch")
+    assert(result[anchor].r==case.rgb.r and result[anchor].g==case.rgb.g
+        and result[anchor].b==case.rgb.b,"Source RGB changed")
   end
 end
 for _, count in ipairs({4,6,10,16}) do
-  local _, leftAnchor = ramp.generate{
-    center={r=127,g=127,b=127},count=count,
-    strength=50,style="Monochromatic",stepMode="Balanced"
+  local _,left=ramp.generate{
+    center={r=127,g=127,b=127},count=count,strength=50,
+    style="Monochromatic",stepMode="Balanced"
   }
-  local _, rightAnchor = ramp.generate{
-    center={r=128,g=128,b=128},count=count,
-    strength=50,style="Monochromatic",stepMode="Balanced"
+  local _,right=ramp.generate{
+    center={r=128,g=128,b=128},count=count,strength=50,
+    style="Monochromatic",stepMode="Balanced"
   }
-  assert(leftAnchor == count/2 and rightAnchor == count/2+1,
-    "Any even count must support either midpoint anchor")
+  assert(left==count/2 and right==count/2+1)
 end
 for _, count in ipairs({3,5,7,9,15}) do
-  for _, gray in ipairs({0,128,255}) do
-    local _, anchor = ramp.generate{
-      center={r=gray,g=gray,b=gray},count=count,
-      strength=50,style="Monochromatic",stepMode="Balanced"
+  for _, v in ipairs({0,128,255}) do
+    local _, anchor=ramp.generate{
+      center={r=v,g=v,b=v},count=count,strength=50,
+      style="Monochromatic",stepMode="Balanced"
     }
-    assert(anchor == (count+1)/2, "Odd counts must retain one center")
+    assert(anchor==(count+1)/2)
   end
 end
 assert(near(color.rgb_to_grayscale({r=128,g=128,b=128}),128,1e-9))
-assert(color.rgb_to_grayscale({r=0,g=255,b=0}) > 128)
-assert(color.rgb_to_grayscale({r=255,g=0,b=0}) < 128)
+assert(gray({r=0,g=255,b=0})>128 and gray({r=255,g=0,b=0})<128)
 
 -- Palette writer tests using Aseprite-compatible mocks.
 local function makePalette(size)
@@ -250,4 +247,4 @@ assert(added and #large == 258 and commits == 2)
 assert(large.entries[251].r ~= nil and large.entries[257].b ~= nil)
 local multi = paletteWriter.append({isValid=true,palettes={p,p}},colors)
 assert(not multi)
-print("OK: " .. countCases .. " ramp scenarios, five Step Modes, gamut conversions, unrestricted palette append")
+print("OK: " .. countCases .. " ramp scenarios; grayscale output targets, five Step Modes, gamut, palette append")

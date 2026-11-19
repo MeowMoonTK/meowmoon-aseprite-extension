@@ -1,5 +1,5 @@
--- Hue Shift Style controls hue direction. Step Mode controls OKLab Lightness
--- spacing ONLY; the hue and chroma profiles do not depend on Step Mode.
+-- Hue Shift Style controls hue direction. Step Mode controls the measured
+-- grayscale brightness of the final sRGB colors, not input OKLab Lightness.
 return function(colorMath)
   local M = {}
 
@@ -51,13 +51,34 @@ return function(colorMath)
   local function step_progress(mode, t, shadow)
     if (mode == "Shadow Detail" and shadow)
         or (mode == "Highlight Detail" and not shadow) then
-      -- Redistribute Lightness samples toward the far endpoint.
+      -- Redistribute grayscale targets toward the far endpoint.
       return 1 - (1 - t) ^ 2
     elseif mode == "Soft Ends" then
-      -- Ease Lightness near the anchor and both endpoints.
+      -- Ease grayscale targets near the anchor and both endpoints.
       return t * t * (3 - 2 * t)
     end
     return t
+  end
+
+  -- Inverting grayscale through the real RGB output accounts for hue changes,
+  -- gamut compression and 8-bit quantization. C/h still come from Shift Style;
+  -- they never depend on the selected Step Mode.
+  local function rgb_at_grayscale(target, chroma, hue)
+    local low, high = 0, 1
+    local best, bestError = nil, math.huge
+    -- The final output is 8-bit RGB, so 16 bisections suffice; choose the
+    -- closest measured grayscale, not simply the final bisection midpoint.
+    for _ = 1, 16 do
+      local L = (low + high) * 0.5
+      local rgb = colorMath.oklch_to_rgb(L, chroma, hue)
+      local observed = colorMath.rgb_to_grayscale(rgb) / 255
+      local error = math.abs(observed - target)
+      if error < bestError then
+        best, bestError = rgb, error
+      end
+      if observed < target then low = L else high = L end
+    end
+    return best
   end
 
   function M.generate(opts)
@@ -89,12 +110,12 @@ return function(colorMath)
     end
     local leftSteps, rightSteps = anchor - 1, n - anchor
 
-    -- Balance the OKLab lightness step on both sides, rather than scaling
-    -- shadow by base.L and highlight by (1 - base.L) independently.
-    -- Near pure black/white, an exactly symmetric range would collapse to
-    -- zero. Fade back toward the available full range at those extremes.
-    local nativeShadowStep = 0.80 * base.L / leftSteps
-    local nativeHighlightStep = 0.80 * (1 - base.L) / rightSteps
+    -- Allocate the available GRAYSCALE range, leaving 20% headroom at
+    -- black/white. Balanced uses a common brightness increment unless that
+    -- would collapse a ramp anchored very close to either extreme.
+    local gray0 = colorMath.rgb_to_grayscale(rgb) / 255
+    local nativeShadowStep = 0.80 * gray0 / leftSteps
+    local nativeHighlightStep = 0.80 * (1 - gray0) / rightSteps
     local minStep = math.min(nativeShadowStep, nativeHighlightStep)
     local maxStep = math.max(nativeShadowStep, nativeHighlightStep)
     local balance = maxStep > 0 and math.min(1, 4 * minStep / maxStep) or 0
@@ -113,19 +134,20 @@ return function(colorMath)
         local lightnessT = step_progress(mode, t, shadow)
         local sign = shadow and -1 or 1
 
-        local L
+        local grayTarget
         if mode == "Full Range" then
-          -- Original behavior for comparison: each side extends independently.
-          local headroom = shadow and base.L or (1 - base.L)
-          L = base.L + sign * 0.80 * headroom * lightnessT
+          -- Each side independently occupies 80% of its available gray range.
+          local headroom = shadow and gray0 or (1 - gray0)
+          grayTarget = gray0 + sign * 0.80 * headroom * lightnessT
         else
-          local stepL = shadow and shadowStep or highlightStep
-          L = base.L + sign * stepL * sideSteps * lightnessT
+          local stepG = shadow and shadowStep or highlightStep
+          grayTarget = gray0 + sign * stepG * sideSteps * lightnessT
         end
-        -- Chroma and hue progress independently from Lightness Step Mode.
+        -- Chroma and hue follow their existing profiles. Solve for the
+        -- Lightness whose FINAL gamut-mapped RGB has the desired gray value.
         local C = base.C * (1 - 0.18 * t)
         local h = (base.h + hue_shift(opts.style, base.h, sign * t, t, power, steps)) % 360
-        result[i] = colorMath.oklch_to_rgb(L, C, h)
+        result[i] = rgb_at_grayscale(grayTarget, C, h)
       end
     end
     return result, anchor
