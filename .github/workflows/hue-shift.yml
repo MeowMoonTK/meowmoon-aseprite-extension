@@ -52,6 +52,31 @@ jobs:
           $source = Get-Content 'extensions/hue-shift/src/autoupdate.ps1' -Raw
           if ($source -match '(?m)^\s*&\s*gh\s' -or $source -match 'gh auth') { throw 'Legacy GitHub CLI call remains' }
           Write-Host 'PowerShell 5.1 syntax and no-gh dependency OK.'
+      - name: Test actual detached startup command on Windows
+        shell: powershell
+        run: |
+          # Use the same cmd.exe start syntax as the Aseprite Lua launcher.
+          # The probe needs no network and works in a path containing spaces.
+          $base = Join-Path $env:RUNNER_TEMP 'Hue Shift Launch Test'
+          New-Item -ItemType Directory -Path $base -Force | Out-Null
+          $probe = Join-Path $base 'launch probe.ps1'
+          $result = Join-Path $base 'launch result.txt'
+          @'
+          param([string]$InstallDir)
+          [IO.File]::WriteAllText((Join-Path $InstallDir "launch result.txt"), "LAUNCHED")
+          '@ | Set-Content -LiteralPath $probe -Encoding UTF8
+          $cmd = 'start "" /min powershell.exe -WindowStyle Hidden -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $probe + '" -InstallDir "' + $base + '"'
+          & cmd.exe /d /c $cmd
+          for ($i=0; $i -lt 80 -and -not (Test-Path -LiteralPath $result); $i++) {
+            Start-Sleep -Milliseconds 250
+          }
+          if (-not (Test-Path -LiteralPath $result)) {
+            throw 'Detached startup command did not run the PowerShell child'
+          }
+          if ((Get-Content -LiteralPath $result -Raw) -ne 'LAUNCHED') {
+            throw 'Detached startup command produced invalid output'
+          }
+          Write-Host 'Windows detached launch with spaced install path OK.'
       - name: Unauthenticated public GitHub Release download and install
         shell: powershell
         run: |
