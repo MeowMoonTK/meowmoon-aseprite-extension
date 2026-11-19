@@ -17,6 +17,18 @@ local function linear_to_srgb(x)
   return 1.055 * (x ^ (1 / 2.4)) - 0.055
 end
 
+
+-- Perceptual grayscale brightness on the familiar 0..255 sRGB gray scale.
+-- Convert RGB to linear-light Rec.709 luminance, then encode it as a
+-- neutral sRGB gray; #808080 is the midpoint used for even-ramp anchoring.
+function M.rgb_to_grayscale(rgb)
+  local r = srgb_to_linear(rgb.r / 255)
+  local g = srgb_to_linear(rgb.g / 255)
+  local b = srgb_to_linear(rgb.b / 255)
+  local luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return 255 * clamp(linear_to_srgb(luminance), 0, 1)
+end
+
 function M.rgb_to_oklch(rgb)
   local r = srgb_to_linear(rgb.r / 255)
   local g = srgb_to_linear(rgb.g / 255)

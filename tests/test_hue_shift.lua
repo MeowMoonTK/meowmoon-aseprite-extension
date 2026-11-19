@@ -29,7 +29,11 @@ for _, style in ipairs(ramp.styles) do
             stepMode=mode
           }
         assert(#out == n)
-        assert(anchor == math.floor((n+1)/2))
+        local expectedAnchor = math.floor((n+1)/2)
+        if n % 2 == 0 and color.rgb_to_grayscale(base) >= 128 then
+          expectedAnchor = expectedAnchor + 1
+        end
+        assert(anchor == expectedAnchor, "Anchor differs from grayscale midpoint")
         assert(out[anchor].r==base.r and out[anchor].g==base.g and out[anchor].b==base.b)
         local lastL = -1
         for _, rgb in ipairs(out) do
@@ -158,6 +162,63 @@ for _, style in ipairs(pureRamp.styles) do
     end
   end
 end
+
+
+-- Grayscale placement for even palettes:
+-- #808080 is the neutral reference; a bright source moves from 4 to 5
+-- in an 8-color ramp to allow four shadows, a dark one stays at 4.
+local evenCases = {
+  {rgb={r=0,g=0,b=0}, expected=4},
+  {rgb={r=127,g=127,b=127}, expected=4},
+  {rgb={r=128,g=128,b=128}, expected=5},
+  {rgb={r=255,g=255,b=255}, expected=5},
+  -- Saturated colors use luminance-weighted grayscale, not raw RGB
+  -- channel average and not the hue/chroma of the source.
+  {rgb={r=255,g=0,b=0}, expected=4},
+  {rgb={r=0,g=255,b=0}, expected=5},
+  {rgb={r=0,g=0,b=255}, expected=4},
+  {rgb={r=175,g=179,b=129}, expected=5}
+}
+for _, case in ipairs(evenCases) do
+  for _, mode in ipairs(ramp.stepModes) do
+    local result, anchor = ramp.generate{
+      center=case.rgb,count=8,strength=50,
+      style="Warm Light / Cool Shadow",stepMode=mode
+    }
+    assert(anchor == case.expected,
+      "Wrong grayscale anchor for RGB " ..
+      case.rgb.r .. "," .. case.rgb.g .. "," .. case.rgb.b ..
+      " in " .. mode)
+    assert(result[anchor].r == case.rgb.r
+       and result[anchor].g == case.rgb.g
+       and result[anchor].b == case.rgb.b,
+      "The original RGB must remain unchanged at the selected anchor")
+  end
+end
+for _, count in ipairs({4,6,10,16}) do
+  local _, leftAnchor = ramp.generate{
+    center={r=127,g=127,b=127},count=count,
+    strength=50,style="Monochromatic",stepMode="Balanced"
+  }
+  local _, rightAnchor = ramp.generate{
+    center={r=128,g=128,b=128},count=count,
+    strength=50,style="Monochromatic",stepMode="Balanced"
+  }
+  assert(leftAnchor == count/2 and rightAnchor == count/2+1,
+    "Any even count must support either midpoint anchor")
+end
+for _, count in ipairs({3,5,7,9,15}) do
+  for _, gray in ipairs({0,128,255}) do
+    local _, anchor = ramp.generate{
+      center={r=gray,g=gray,b=gray},count=count,
+      strength=50,style="Monochromatic",stepMode="Balanced"
+    }
+    assert(anchor == (count+1)/2, "Odd counts must retain one center")
+  end
+end
+assert(near(color.rgb_to_grayscale({r=128,g=128,b=128}),128,1e-9))
+assert(color.rgb_to_grayscale({r=0,g=255,b=0}) > 128)
+assert(color.rgb_to_grayscale({r=255,g=0,b=0}) < 128)
 
 -- Palette writer tests using Aseprite-compatible mocks.
 local function makePalette(size)
