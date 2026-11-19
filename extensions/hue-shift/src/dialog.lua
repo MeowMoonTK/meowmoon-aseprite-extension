@@ -133,7 +133,7 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
         }
       end
     }
-  }
+  end
   dlg:button{
     id = "apply",
     text = "Add to Palette",
