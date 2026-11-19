@@ -4,7 +4,7 @@ Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, indep
 
 ## Step Mode (independent of Shift Style)
 
-- **Balanced (default):** equal OKLab Lightness spacing per step on both sides of the center, within the smaller available range; avoids disproportionately strong shadow steps.
+- **Balanced (default):** equal OKLab Lightness spacing on both sides for ordinary center colors; adaptively preserves usable range near black and white.
 - **Full Range:** original independent shadow/highlight ranges, useful when stronger extremes are wanted.
 - **Shadow Detail:** Balanced endpoints, but places more intermediate shades near the darkest endpoint.
 - **Highlight Detail:** Balanced endpoints, but places more shades near the brightest endpoint.
