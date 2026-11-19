@@ -1,0 +1,74 @@
+name: One-time Hue Shift v0.1.6 release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/hue-shift-release-016.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Explicit owner-authorized build only, never ordinary source pushes.
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[release-hue-shift-v0.1.6]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate manifest and grayscale algorithm
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("extensions/hue-shift")
+          manifest=json.loads((root/"package.json").read_text(encoding="utf-8"))
+          assert manifest["version"] == "0.1.6"
+          assert manifest["name"] == "meowmoon-hue-shift"
+          ramp=(root/"src/ramp.lua").read_text(encoding="utf-8")
+          assert "rgb_at_grayscale" in ramp
+          assert "grayTarget" in ramp
+          assert "rgb_to_grayscale(rgb)" in ramp
+          PY
+      - name: Run Lua regression tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.4
+          lua5.4 tests/test_hue_shift.lua
+          lua5.4 tests/test_wheel.lua
+          lua5.4 tests/test_startup.lua
+      - name: Package and validate Hue Shift v0.1.6
+        run: |
+          python3 scripts/build_hue_shift.py
+          python3 - <<'PY'
+          import json,zipfile
+          from pathlib import Path
+          archive=Path("dist/hue-shift-0.1.6.aseprite-extension")
+          assert archive.exists(), "Build produced no extension"
+          with zipfile.ZipFile(archive) as z:
+            assert z.testzip() is None
+            expected={"package.json","main.lua","src/color.lua","src/ramp.lua","src/palette.lua","src/wheel.lua","src/dialog.lua","src/autoupdate.ps1"}
+            assert set(z.namelist()) == expected
+            manifest=json.loads(z.read("package.json"))
+            assert manifest["version"] == "0.1.6"
+            assert b"rgb_at_grayscale" in z.read("src/ramp.lua")
+            assert b"rgb_to_grayscale" in z.read("src/color.lua")
+          PY
+          (cd dist && sha256sum hue-shift-0.1.6.aseprite-extension > hue-shift-0.1.6.sha256)
+      - name: Publish v0.1.6 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view hue-shift-v0.1.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Tag hue-shift-v0.1.6 already exists; refusing overwrite."
+            exit 1
+          fi
+          gh release create hue-shift-v0.1.6 \
+            dist/hue-shift-0.1.6.aseprite-extension \
+            dist/hue-shift-0.1.6.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Hue Shift v0.1.6" \
+            --notes "Step Modes now target the Rec.709 grayscale brightness measured from the final RGB output. The generator solves OKLab Lightness after Hue/Chroma shifts and sRGB gamut compression. Also includes five selectable Step Modes and adaptive grayscale-based 4/5 center placement for even color counts. Preserves original RGB center, existing update mechanism and Palette append. Release build explicitly requested by repository owner."
