@@ -1,5 +1,5 @@
--- Hue style sets hue direction; Step Mode controls how far each ramp
--- color travels along the shadow/highlight path.
+-- Hue Shift Style controls hue direction. Step Mode controls OKLab Lightness
+-- spacing ONLY; the hue and chroma profiles do not depend on Step Mode.
 return function(colorMath)
   local M = {}
 
@@ -51,10 +51,10 @@ return function(colorMath)
   local function step_progress(mode, t, shadow)
     if (mode == "Shadow Detail" and shadow)
         or (mode == "Highlight Detail" and not shadow) then
-      -- Reach deeper into the side early, reserving more samples at the endpoint.
+      -- Redistribute Lightness samples toward the far endpoint.
       return 1 - (1 - t) ^ 2
     elseif mode == "Soft Ends" then
-      -- Concentrate colors close to the anchor and both endpoints.
+      -- Ease Lightness near the anchor and both endpoints.
       return t * t * (3 - 2 * t)
     end
     return t
@@ -103,20 +103,21 @@ return function(colorMath)
         local steps = math.abs(i - anchor)
         local sideSteps = shadow and leftSteps or rightSteps
         local t = steps / sideSteps
-        local d = step_progress(mode, t, shadow)
+        local lightnessT = step_progress(mode, t, shadow)
         local sign = shadow and -1 or 1
 
         local L
         if mode == "Full Range" then
           -- Original behavior for comparison: each side extends independently.
           local headroom = shadow and base.L or (1 - base.L)
-          L = base.L + sign * 0.80 * headroom * d
+          L = base.L + sign * 0.80 * headroom * lightnessT
         else
           local stepL = shadow and shadowStep or highlightStep
-          L = base.L + sign * stepL * sideSteps * d
+          L = base.L + sign * stepL * sideSteps * lightnessT
         end
-        local C = base.C * (1 - 0.18 * d)
-        local h = (base.h + hue_shift(opts.style, base.h, sign * d, d, power, steps)) % 360
+        -- Chroma and hue progress independently from Lightness Step Mode.
+        local C = base.C * (1 - 0.18 * t)
+        local h = (base.h + hue_shift(opts.style, base.h, sign * t, t, power, steps)) % 360
         result[i] = colorMath.oklch_to_rgb(L, C, h)
       end
     end
