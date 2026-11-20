@@ -8,6 +8,8 @@ Select **Mode > Multi-Anchor** to generate a ramp from **2–8 color references*
 
 **Target** is the total output count (reference count through 16). Reference slots are evenly distributed across the ramp; when intervals cannot divide evenly, their lengths differ by at most one color. The first and last references guide the dark and light ends. References are soft constraints: output Hue, Chroma and Lightness may all differ from their input colors. There is no center color, Shift Style, Hue Strength, Step Mode or easing in this mode.
 
+The selected reference has a persistent black/white outline on the numbered Anchor bar, even when the pointer leaves it. The highlight follows the reference during a drag and settles at its new slot on drop. Selecting is based on position, so references with identical colors can be selected and edited independently.
+
 The generator fits a smoothed, unwrapped OKLCH hue/chroma path in the supplied reference order; it does not sort by input brightness. Neutral references borrow nearby chromatic hue instead of introducing an arbitrary hue. Final sRGB grayscale brightness increases uniformly across a useful tonal range, with gamut compression and reduced chroma near the ends, even if a bright reference occupies the dark-end slot. Extra references guide the path but do not force every hue reversal into the result; contradictory references can still produce bends, so inspect the preview/Color Map.
 
 The **Show HSV map** checkbox expands the optional Color Map. Reference markers indicate their fitted output slots, not exact copies of the reference RGB. Preview edits do not change the sprite; **Add to Palette** appends the current result in one undoable transaction.
