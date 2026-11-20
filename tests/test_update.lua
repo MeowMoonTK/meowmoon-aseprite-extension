@@ -14,9 +14,9 @@ local function scenario(options)
     if options.openThrows then error('access denied') end
     if options.openDenied then return nil, 'Permission denied', 13 end
     if mode == 'w' then
-      path = p:sub(1, -9)
-      files[p] = true
-      return {close=function() return true end}
+      path = p
+      files[p] = {status='checking'}
+      return {write=function() return true end,close=function() return true end}
     end
     if not files[p] then return nil, 'No such file', 2 end
     return {read=function()
@@ -92,8 +92,9 @@ for _, fault in ipairs({'openThrows','openDenied','readThrows','badJson','timeou
     s.files[s.path]={status='up_to_date'}
     s.tick(1)
   end
-  assert(s.u.state=='error' and s.u.busy, fault .. ': uncertain worker must retain lock')
-  assert(not s.timers[1].active and not s.u.checkNow())
+  assert(s.u.state=='error' and not s.u.busy, fault .. ': failed request must finish')
+  if fault=='timeout' then assert(s.u.launchStatus:find('timed out')) end
+  assert(not s.timers[1].active)
   assert(next(s.files)==nil)
 end
 for _, fault in ipairs({'none','installThrows','installFalse','installNil','stopDuringInstall','noInstaller'}) do
@@ -115,5 +116,5 @@ s.u.stop()
 assert(not s.timers[#s.timers].active and next(s.files)==nil and not s.u.checkNow())
 s=scenario({removeDenied=true})
 s.deliver({status='error',message='HTTP 403'})
-assert(s.u.launchStatus:find('cleanup failed'))
+assert(s.u.launchStatus:find('Could not remove'))
 print('OK: updater locks, timeout, permissions, cleanup, native cancel/error and reentrant exit')

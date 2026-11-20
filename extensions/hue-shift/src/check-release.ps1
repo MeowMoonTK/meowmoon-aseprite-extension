@@ -1,90 +1,24 @@
-# Download and verify Hue Shift. Never install or replace extension directories.
+# Fetch and verify only. Aseprite owns confirmation and installation.
 [CmdletBinding()]
 param(
   [Parameter(Mandatory=$true)][string]$CurrentVersion,
-  [Parameter(Mandatory=$true)][string]$ResultFile,
-  [switch]$Worker
+  [Parameter(Mandatory=$true)][string]$ResultFile
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 function Write-Result([string]$state,[string]$message,[string]$version,[string]$bundle) {
-  $payload = @{ status=$state; message=$message; version=$version; packagePath=$bundle } | ConvertTo-Json -Compress
-  if ($Worker) {
-    # Only the supervisor publishes a result, after the worker has exited.
-    Write-Output $payload
-    return
+  # Lua creates the result before launch and deletes it on cancellation.
+  # File.Replace is atomic and cannot recreate a deleted/cancelled request.
+  if (-not (Test-Path -LiteralPath $ResultFile -PathType Leaf)) { return $false }
+  $staging = $ResultFile + '.writing'
+  $payload = @{status=$state; message=$message; version=$version; packagePath=$bundle} | ConvertTo-Json -Compress
+  [IO.File]::WriteAllText($staging,$payload,[Text.UTF8Encoding]::new($false))
+  try { [IO.File]::Replace($staging,$ResultFile,[System.Management.Automation.Language.NullString]::Value) }
+  catch {
+    if (-not (Test-Path -LiteralPath $ResultFile)) { return $false }
+    throw
   }
-  $tempResult = $ResultFile + '.writing'
-  [IO.File]::WriteAllText($tempResult,$payload,[System.Text.UTF8Encoding]::new($false))
-  Move-Item -LiteralPath $tempResult -Destination $ResultFile -Force
-  try {
-    $logDir = Join-Path $env:LOCALAPPDATA 'MeowMoon\HueShift'
-    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    Add-Content -LiteralPath (Join-Path $logDir 'update.log') -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $state + ': ' + $message)
-  } catch {}
-}
-# The job is the standard PowerShell process boundary. Bound the entire network
-# operation, not just individual HTTP requests (DNS/TLS can exceed their limits).
-if (-not $Worker) {
-  $job = $null
-  $mutex = $null
-  $ownsMutex = $false
-  $delivered = $false
-  $keepPackage = $false
-  $pending = $ResultFile + '.pending'
-  try {
-    if (-not (Test-Path -LiteralPath $pending -PathType Leaf)) {
-      throw 'Update request is no longer active.'
-    }
-    # Coordinate detached workers even across plugin reloads/Aseprite instances.
-    $mutex = [Threading.Mutex]::new($false, 'Local\MeowMoon-HueShift-ReleaseCheck')
-    try { $ownsMutex = $mutex.WaitOne(0) }
-    catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
-    if (-not $ownsMutex) { throw 'Another Hue Shift Release worker is still running. Try again shortly.' }
-    $job = Start-Job -ScriptBlock {
-      param($script, $version, $result)
-      & $script -CurrentVersion $version -ResultFile $result -Worker
-    } -ArgumentList $PSCommandPath, $CurrentVersion, $ResultFile
-    $completed = Wait-Job -Job $job -Timeout 120
-    if ($null -eq $completed) { throw 'Release worker timed out after 120 seconds.' }
-    if ($job.State -ne 'Completed') { throw ('Release worker failed: ' + $job.State) }
-    $output = @(Receive-Job -Job $job -ErrorAction Stop)
-    if ($output.Count -ne 1) { throw 'Release worker returned no unique result.' }
-    $result = $output[0] | ConvertFrom-Json
-    if ($result.status -notin @('update','up_to_date','error')) { throw 'Invalid worker status.' }
-    if (Test-Path -LiteralPath $pending -PathType Leaf) {
-      Write-Result $result.status $result.message $result.version $result.packagePath
-      $delivered = $true
-      $keepPackage = $result.status -eq 'update'
-    }
-    if ($result.status -eq 'error') { exit 1 }
-    exit 0
-  } catch {
-    if ($null -ne $job) { Stop-Job -Job $job -ErrorAction SilentlyContinue }
-    if (Test-Path -LiteralPath $pending -PathType Leaf) {
-      Write-Result 'error' $_.Exception.Message '' ''
-      $delivered = $true
-    }
-    exit 1
-  } finally {
-    # Terminate/reap before touching any download the worker might still write.
-    if ($null -ne $job) {
-      Stop-Job -Job $job -ErrorAction SilentlyContinue
-      Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-    }
-    if ($ownsMutex) { $mutex.ReleaseMutex() }
-    if ($null -ne $mutex) { $mutex.Dispose() }
-    Remove-Item -LiteralPath ($ResultFile + '.sha256') -Force -ErrorAction SilentlyContinue
-    if (-not $keepPackage) {
-      Remove-Item -LiteralPath ($ResultFile + '.aseprite-extension') -Force -ErrorAction SilentlyContinue
-    }
-    if (-not $delivered -or -not (Test-Path -LiteralPath $pending -PathType Leaf)) {
-      # Lua cancelled/closed, including a race with result publication.
-      foreach ($suffix in @('', '.writing', '.aseprite-extension')) {
-        Remove-Item -LiteralPath ($ResultFile + $suffix) -Force -ErrorAction SilentlyContinue
-      }
-    }
-  }
+  return $true
 }
 function Verify-Extension([string]$archivePath,[version]$expectedVersion) {
   $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
@@ -116,14 +50,20 @@ function Verify-Extension([string]$archivePath,[version]$expectedVersion) {
   }
 }
 $downloaded = $null
-$checksumFile = $null
+$client = $null
 try {
   if ($CurrentVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid installed extension version.' }
   if (-not (Test-Path -LiteralPath (Split-Path -Parent $ResultFile) -PathType Container)) { throw 'Result directory does not exist.' }
   Add-Type -AssemblyName System.IO.Compression.FileSystem
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-  $headers = @{ 'Accept'='application/vnd.github+json'; 'User-Agent'='MeowMoon-HueShift-Updater' }
-  $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/MeowMoonTK/meowmoon-aseprite-extension/releases?per_page=100' -Headers $headers -TimeoutSec 20 -ErrorAction Stop
+  Add-Type -AssemblyName System.Net.Http
+  $client = [Net.Http.HttpClient]::new()
+  $client.Timeout = [TimeSpan]::FromSeconds(30)
+  $client.MaxResponseContentBufferSize = 50MB
+  $client.DefaultRequestHeaders.Add('Accept', 'application/vnd.github+json')
+  $client.DefaultRequestHeaders.Add('User-Agent', 'MeowMoon-HueShift-Updater')
+  $releaseBytes = $client.GetByteArrayAsync('https://api.github.com/repos/MeowMoonTK/meowmoon-aseprite-extension/releases?per_page=100').GetAwaiter().GetResult()
+  $releases = [Text.Encoding]::UTF8.GetString($releaseBytes) | ConvertFrom-Json
   $latest = $null
   foreach ($release in $releases) {
     if ($release.draft -or $release.prerelease) { continue }
@@ -135,7 +75,7 @@ try {
   }
   if ($null -eq $latest) { throw 'No stable Hue Shift Release found.' }
   if ($latest.Version -le [version]$CurrentVersion) {
-    Write-Result 'up_to_date' ('Installed v' + $CurrentVersion + ' is current.') $CurrentVersion ''
+    Write-Result 'up_to_date' ('Installed v' + $CurrentVersion + ' is current.') $CurrentVersion '' | Out-Null
     exit 0
   }
   $versionText = $latest.Version.ToString()
@@ -146,28 +86,27 @@ try {
     throw ('Release ' + $latest.Tag + ' lacks the package or SHA256 file.')
   }
   $downloaded = $ResultFile + '.aseprite-extension'
-  $checksumFile = $ResultFile + '.sha256'
   $baseUrl = 'https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/download/' + $latest.Tag + '/'
-  Invoke-WebRequest -Uri ($baseUrl + $archiveName) -Headers $headers -UseBasicParsing -TimeoutSec 60 -OutFile $downloaded -ErrorAction Stop | Out-Null
-  Invoke-WebRequest -Uri ($baseUrl + $checksumName) -Headers $headers -UseBasicParsing -TimeoutSec 30 -OutFile $checksumFile -ErrorAction Stop | Out-Null
-  $checksumText = (Get-Content -LiteralPath $checksumFile -Raw).Trim()
+  $bytes = $client.GetByteArrayAsync($baseUrl + $archiveName).GetAwaiter().GetResult()
+  [IO.File]::WriteAllBytes($downloaded, $bytes)
+  $checksumBytes = $client.GetByteArrayAsync($baseUrl + $checksumName).GetAwaiter().GetResult()
+  $checksumText = [Text.Encoding]::UTF8.GetString($checksumBytes).Trim()
   $checksumPattern = '^([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($archiveName) + '$'
   if ($checksumText -notmatch $checksumPattern) { throw 'Malformed SHA256 file.' }
   $expectedHash = $Matches[1].ToLowerInvariant()
   $actualHash = (Get-FileHash -LiteralPath $downloaded -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($actualHash -ne $expectedHash) { throw 'SHA256 verification failed.' }
   Verify-Extension $downloaded $latest.Version
-  Write-Result 'update' ('Verified Hue Shift v' + $versionText + '.') $versionText $downloaded
-  # Keep the verified package until the Aseprite installer consumes it.
-  $downloaded = $null
+  if (Write-Result 'update' ('Verified Hue Shift v' + $versionText + '.') $versionText $downloaded) {
+    $downloaded = $null # Lua retains this input until Options returns.
+  }
   exit 0
 } catch {
-  Write-Result 'error' $_.Exception.Message '' ''
+  Write-Result 'error' $_.Exception.Message '' '' | Out-Null
   exit 1
 } finally {
-  if ($checksumFile -and (Test-Path -LiteralPath $checksumFile)) {
-    Remove-Item -LiteralPath $checksumFile -Force -ErrorAction SilentlyContinue
-  }
+  if ($null -ne $client) { $client.Dispose() }
+  Remove-Item -LiteralPath ($ResultFile + '.writing') -Force -ErrorAction SilentlyContinue
   if ($downloaded -and (Test-Path -LiteralPath $downloaded)) {
     Remove-Item -LiteralPath $downloaded -Force -ErrorAction SilentlyContinue
   }

@@ -1,5 +1,4 @@
 -- Hue Shift version is read from plugin.version.
-local startupTimer
 local activeUpdater
 
 function init(plugin)
@@ -33,30 +32,9 @@ function init(plugin)
       if not ok then app.alert{title="Hue Shift Updates",text=message} end
     end
   }
-
-  if app.isUIAvailable and app.os and app.os.windows then
-    -- Defer the security-gated shell call until Aseprite's UI loop starts.
-    if Timer then
-      startupTimer=Timer{
-        interval=1.0,
-        ontick=function()
-          startupTimer:stop()
-          updater.background()
-          startupTimer=nil
-        end
-      }
-      startupTimer:start()
-    else
-      updater.background()
-    end
-  end
 end
 
 function exit(plugin)
-  if startupTimer then
-    startupTimer:stop()
-    startupTimer=nil
-  end
   if activeUpdater then
     activeUpdater.stop()
     activeUpdater=nil

@@ -18,43 +18,24 @@ Brightness is measured as the source color's **grayscale-equivalent sRGB value**
 
 Step Mode now controls the **grayscale value of each final RGB color** (0–255 Rec.709 luminance encoded as sRGB), rather than dividing OKLab L. Each color's Hue and intended Chroma still follow the original Shift Style. The generator searches for an OKLab L that produces the target gray after sRGB gamut mapping, reducing Chroma when necessary. The original RGB stays untouched at the anchor. Balanced prioritizes uniform grayscale increments over reaching the darkest and lightest possible endpoints; at 8-bit precision individual steps may differ by a fraction of a gray level.
 
-## Native Aseprite update workflow (Windows, v0.1.7 source)
+## Updates from the panel (Windows)
 
-Hue Shift checks for stable GitHub Releases one second after Aseprite's UI initializes. Checking does not block the color editor. When a newer Release is available:
+Hue Shift does not check for updates when Aseprite starts or when the panel opens.
 
-1. A small PowerShell helper fetches the Release archive and its SHA-256 file over HTTPS.
-2. It validates the SHA-256, ZIP entries and extension identity/version, then writes a JSON status result to the Windows temporary directory.
-3. Lua receives that result and calls Aseprite's native installer:
-   \`app.command.Options{ installExtension = verifiedPackagePath }\`
-4. **Aseprite asks you to confirm the upgrade**. Restart Aseprite to activate the new version.
+1. Click **Check Updates** in the Hue Shift panel (or use File > Scripts > Hue Shift: Check Updates).
+2. One background PowerShell process checks stable public GitHub Releases. If newer, it downloads the package and SHA-256 file and verifies the checksum, ZIP entries and extension identity/version.
+3. Aseprite opens Preferences > Extensions and asks to replace the installed extension. Accept or cancel there.
+4. Close Preferences. If accepted, restart Aseprite and check the version shown in the Hue Shift panel.
 
-**PowerShell no longer removes, renames, uninstalls or replaces extension folders.** Only Aseprite's native installer changes the installation. A successful download does not prove the user confirmed installation.
+Only Aseprite's [native Options command](https://aseprite.org/api/command/Options) changes the installed extension. The updater never unpacks or replaces its installation directory. Returning from Options does not prove installation: the panel tells you to restart **if you accepted**.
 
-You can check manually using the **Check Updates** button in Hue Shift or **File > Scripts > Hue Shift: Check Updates**. This command also checks asynchronously and displays the result when finished. Already up-to-date installations stay quiet on startup.
+The button is disabled during a check/installer. Three HTTP requests use .NET HttpClient's 30-second full-response timeout; Lua stops polling after 120 seconds. Errors end the check and leave color generation available. The package is retained until the native command returns, including plugin unload during an upgrade; then the request/package are removed. Removing the request also prevents late results after cancellation. No supervisor, child job, scheduled task, or separate updater extension is used.
 
-### Permissions and diagnostics
+Aseprite may ask for script file/execute permissions on the first manual check. Declining permissions must leave ramp generation usable. Check errors appear in the panel and an alert; temporary-file cleanup failures appear in status. Forced shutdown or denied deletion can leave temporary files for OS/user cleanup.
 
-On first use, Aseprite might ask for permission to execute PowerShell and read the temporary result file. **Give full trust to this script** / **Give Script Full Access** allows subsequent startup checks. Hue Shift's palette generator is usable even when these permissions are declined. Background errors remain in the Updates status and print diagnostics without a startup popup. Manual checks display errors immediately. Request creation, shell execution, reading and cleanup are permission-gated; denial must not disable the palette generator.
+Releases v0.1.5/v0.1.6 contain the old self-updater. Install the first version containing this replacement through Preferences > Extensions > Add Extension once. They cannot reliably bootstrap the replacement themselves.
 
-Detailed log: \`%LOCALAPPDATA%\MeowMoon\HueShift\update.log\`. No GitHub CLI, authentication, separate extension or scheduled task is needed. The feature currently supports Windows; background checks do not run on other operating systems.
-
-### Migrating from older versions
-
-Releases v0.1.5 and v0.1.6 contain the previous self-updater. If that updater cannot run on your computer, it **cannot bootstrap this replacement**. Install the first Release containing the native installer manually once using Aseprite Preferences > Extensions > Add Extension. After that, subsequent Releases can be proposed through Aseprite's installer.
-
-### Design references
-
-This implementation follows the native-install approach demonstrated by [Aseprite Extension Updater](https://github.com/JRiggles/Aseprite-Extension-Updater) (John Riggles, MIT). It does not copy that project's unmaintained networking logic or require its separate extension. [Aseprite's app.command API](https://aseprite.org/api/app_command) and [Timer API](https://aseprite.org/api/timer) are the platform sources. Installation remains user-confirmed rather than silent.
-
-### Request lifetime and installation status
-
-Only one check or native installer may run per plugin instance. A Windows named mutex prevents overlapping Release workers across plugin reloads and Aseprite instances. PowerShell bounds its network worker with a 120-second job timeout and stops/reaps it before publishing errors. Lua polls every 0.5 seconds with a 140-second fallback. If no trustworthy terminal response can be read, retries stay locked until Aseprite restarts.
-
-Each request owns exactly its JSON result and the `.pending`, `.writing`, `.sha256`, and `.aseprite-extension` paths appended to it. Removing the ownership marker cancels publication; PowerShell removes late results/downloads for cancelled requests. Lua cleans known paths only, never a deletion path from JSON. Cleanup failures remain visible in status. Forced process termination or denied deletion can leave files for OS/user cleanup.
-
-The package stays present throughout the synchronous `app.command.Options` call, including reentrant plugin exit. Cleanup runs after the call returns. Aseprite's [Options implementation](https://github.com/aseprite/aseprite/blob/main/src/app/commands/cmd_options.cpp) handles confirmation/installation inside the modal window, preserves preferences during replacement and catches some errors internally. The Lua return does not establish acceptance. Status therefore distinguishes checking, verified download, and installer closed with installation unconfirmed. Confirm the active version after restarting.
-
-See [verification evidence and the pending GUI checklist](../../docs/updater-verification.md).
+Design references: [Aseprite Extension Updater](https://github.com/JRiggles/Aseprite-Extension-Updater) (John Riggles, MIT) demonstrates download + native installation. [Verification evidence](../../docs/updater-verification.md) distinguishes automated checks from live GUI checks.
 
 ## Build / release policy
 

@@ -8,7 +8,7 @@ on:
       - "tests/test_wheel.lua"
       - "tests/test_startup.lua"
       - "tests/test_update.lua"
-      - "tests/test_update_worker.ps1"
+      - "tests/test_update_fetcher.ps1"
       - ".github/workflows/hue-shift.yml"
   pull_request:
     paths:
@@ -17,7 +17,7 @@ on:
       - "tests/test_wheel.lua"
       - "tests/test_startup.lua"
       - "tests/test_update.lua"
-      - "tests/test_update_worker.ps1"
+      - "tests/test_update_fetcher.ps1"
       - ".github/workflows/hue-shift.yml"
   workflow_dispatch:
 
@@ -65,9 +65,9 @@ jobs:
             throw 'Lua must use the Aseprite native installer'
           }
           Write-Host 'Downloader is syntax-valid and cannot replace installed extension.'
-      - name: Test worker timeout, cancellation and cleanup
+      - name: Test result publication and cancellation
         shell: powershell
-        run: ./tests/test_update_worker.ps1
+        run: ./tests/test_update_fetcher.ps1
       - name: Verify public GitHub Release download and SHA256 without installing
         shell: powershell
         run: |
@@ -75,7 +75,7 @@ jobs:
           New-Item -ItemType Directory -Path $folder -Force | Out-Null
           $resultFile = Join-Path $folder 'status.json'
           $sourceManifest = (Get-Content 'extensions/hue-shift/package.json' -Raw)
-          New-Item -ItemType File -Path ($resultFile + '.pending') -Force | Out-Null
+          Set-Content -LiteralPath $resultFile -Encoding ascii -Value '{"status":"checking"}'
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'extensions/hue-shift/src/check-release.ps1' -CurrentVersion '0.1.5' -ResultFile $resultFile
           if ($LASTEXITCODE -ne 0) { throw 'Public Release download or SHA-256 validation failed' }
           $result = Get-Content -LiteralPath $resultFile -Raw | ConvertFrom-Json
@@ -92,13 +92,13 @@ jobs:
         run: |
           $folder = Join-Path $env:RUNNER_TEMP 'Hue Shift Native Update Test'
           $resultFile = Join-Path $folder 'up-to-date.json'
-          New-Item -ItemType File -Path ($resultFile + '.pending') -Force | Out-Null
+          Set-Content -LiteralPath $resultFile -Encoding ascii -Value '{"status":"checking"}'
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'extensions/hue-shift/src/check-release.ps1' -CurrentVersion '99.0.0' -ResultFile $resultFile
           if ($LASTEXITCODE -ne 0) { throw 'Up-to-date check failed' }
           $result = Get-Content -LiteralPath $resultFile -Raw | ConvertFrom-Json
           if ($result.status -ne 'up_to_date') { throw 'Expected no update when installed version is ahead' }
           $badResult = Join-Path $folder 'invalid.json'
-          New-Item -ItemType File -Path ($badResult + '.pending') -Force | Out-Null
+          Set-Content -LiteralPath $badResult -Encoding ascii -Value '{"status":"checking"}'
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'extensions/hue-shift/src/check-release.ps1' -CurrentVersion 'invalid' -ResultFile $badResult
           if ($LASTEXITCODE -eq 0) { throw 'Invalid version should fail' }
           $errorStatus = Get-Content -LiteralPath $badResult -Raw | ConvertFrom-Json
@@ -114,9 +114,11 @@ jobs:
           $status = Join-Path $folder 'detached-status.json'
           $script = (Resolve-Path 'extensions/hue-shift/src/check-release.ps1').Path
           $cmd = 'start "" /min powershell.exe -WindowStyle Hidden -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $script + '" -CurrentVersion "99.0.0" -ResultFile "' + $status + '"'
-          New-Item -ItemType File -Path ($status + '.pending') -Force | Out-Null
+          Set-Content -LiteralPath $status -Encoding ascii -Value '{"status":"checking"}'
           & cmd.exe /d /c $cmd
-          for ($i=0; $i -lt 140 -and -not (Test-Path -LiteralPath $status); $i++) {
+          for ($i=0; $i -lt 240; $i++) {
+            $result = Get-Content -LiteralPath $status -Raw | ConvertFrom-Json
+            if ($result.status -ne 'checking') { break }
             Start-Sleep -Milliseconds 500
           }
           if (-not (Test-Path -LiteralPath $status)) { throw 'Detached launch never returned a result' }
