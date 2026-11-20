@@ -7,6 +7,7 @@ on:
       - "tests/test_hue_shift.lua"
       - "tests/test_wheel.lua"
       - "tests/test_startup.lua"
+      - "tests/test_multi_anchor.lua"
       - ".github/workflows/hue-shift.yml"
   pull_request:
     paths:
@@ -14,6 +15,7 @@ on:
       - "tests/test_hue_shift.lua"
       - "tests/test_wheel.lua"
       - "tests/test_startup.lua"
+      - "tests/test_multi_anchor.lua"
       - ".github/workflows/hue-shift.yml"
   workflow_dispatch:
 
@@ -34,3 +36,4 @@ jobs:
           lua5.4 tests/test_hue_shift.lua
           lua5.4 tests/test_wheel.lua
           lua5.4 tests/test_startup.lua
+          lua5.4 tests/test_multi_anchor.lua

@@ -81,8 +81,105 @@ return function(colorMath)
     return best
   end
 
+  -- Copy and order references; editing/generating must never mutate callers.
+  function M.order_anchors(anchors)
+    assert(type(anchors) == "table" and #anchors >= 2 and #anchors <= 8,
+      "anchors must contain 2..8 colors")
+    local ordered = {}
+    for i, rgb in ipairs(anchors) do
+      local copy = {}
+      for _, channel in ipairs({"r", "g", "b"}) do
+        local v = rgb[channel]
+        assert(type(v) == "number" and v == math.floor(v) and v >= 0 and v <= 255,
+          "anchor channels must be RGB bytes")
+        copy[channel] = v
+      end
+      ordered[i] = copy
+    end
+    table.sort(ordered, function(a, b)
+      local ga, gb = colorMath.rgb_to_grayscale(a), colorMath.rgb_to_grayscale(b)
+      if ga ~= gb then return ga < gb end
+      if a.r ~= b.r then return a.r < b.r end
+      if a.g ~= b.g then return a.g < b.g end
+      return a.b < b.b
+    end)
+    return ordered
+  end
+
+  -- Least-squares fit to soft references, penalizing changes from the overall
+  -- endpoint slope. More references increase smoothing rather than forcing
+  -- each new hue reversal into the ramp. Solve the small tridiagonal system.
+  local function fit_references(values)
+    local m = #values
+    local lambda = 0.12 * (m - 1) ^ 2
+    local slope = (values[m] - values[1]) / (m - 1)
+    local diagonal, rhs = {}, {}
+    for i = 1, m do
+      local endpoint = i == 1 or i == m
+      local weight = endpoint and 4 or 1
+      diagonal[i] = weight + lambda * (endpoint and 1 or 2)
+      rhs[i] = weight * values[i]
+    end
+    rhs[1], rhs[m] = rhs[1] - lambda * slope, rhs[m] + lambda * slope
+    for i = 2, m do
+      local factor = -lambda / diagonal[i-1]
+      diagonal[i] = diagonal[i] + factor * lambda
+      rhs[i] = rhs[i] - factor * rhs[i-1]
+    end
+    local out = { [m] = rhs[m] / diagonal[m] }
+    for i = m-1, 1, -1 do out[i] = (rhs[i] + lambda * out[i+1]) / diagonal[i] end
+    return out
+  end
+
+  local function generate_multi(opts)
+    local refs = M.order_anchors(opts.anchors)
+    local m, n = #refs, tonumber(opts.count)
+    assert(n and n == math.floor(n) and n >= m and n <= 16,
+      "Target must be between the anchor count and 16")
+    local lch, hues, chroma = {}, {}, {}
+    for i, rgb in ipairs(refs) do lch[i] = colorMath.rgb_to_oklch(rgb) end
+    for i, c in ipairs(lch) do
+      local h = c.h
+      -- Near-neutral hue is undefined: borrow the nearest colorful reference
+      -- instead of accidentally introducing red (the conversion's zero hue).
+      if c.C < 0.015 then
+        local nearest, distance = nil, math.huge
+        for j, candidate in ipairs(lch) do
+          if candidate.C >= 0.015 and math.abs(j-i) < distance then
+            nearest, distance = candidate.h, math.abs(j-i)
+          end
+        end
+        h = nearest or 0
+      end
+      hues[i] = i == 1 and h or hues[i-1] + shortest_hue_delta(hues[i-1], h)
+      chroma[i] = math.min(0.24, c.C)
+    end
+    hues, chroma = fit_references(hues), fit_references(chroma)
+    local dark = math.max(0.06, math.min(0.20, colorMath.rgb_to_grayscale(refs[1]) / 255 * 0.65))
+    local light = math.max(0.82, math.min(0.94, 0.35 + colorMath.rgb_to_grayscale(refs[m]) / 255 * 0.65))
+    local result, positions = {}, {}
+    for i = 1, m do positions[i] = 1 + math.floor((i-1)*(n-1)/(m-1) + 0.5) end
+    for i = 1, n do
+      local t = (i-1)/(n-1)
+      -- Match evenly distributed reference slots, including rounded slots
+      -- when Target does not divide evenly by the number of intervals.
+      local k = 1
+      while k < m-1 and i > positions[k+1] do k = k+1 end
+      local u = (i-positions[k])/(positions[k+1]-positions[k])
+      local h = hues[k] * (1-u) + hues[k+1] * u
+      local C = math.max(0, chroma[k] * (1-u) + chroma[k+1] * u)
+      -- Reserve saturation headroom at both ends; solve final RGB brightness
+      -- globally, independently of input L and without any Step Mode/easing.
+      C = C * (0.85 - 0.15 * math.abs(2*t-1))
+      result[i] = rgb_at_grayscale(dark + (light-dark)*t, C, h % 360)
+    end
+    return result, positions
+  end
+
   function M.generate(opts)
     assert(type(opts) == "table", "options table expected")
+    if opts.mode == "Multi-Anchor" then return generate_multi(opts) end
+    assert(opts.mode == nil or opts.mode == "Single Color", "Unknown ramp mode")
     local n = assert(tonumber(opts.count), "count is required")
     assert(n == math.floor(n) and n >= 3 and n <= 16, "count must be 3..16")
     local power = assert(tonumber(opts.strength), "strength is required") / 100

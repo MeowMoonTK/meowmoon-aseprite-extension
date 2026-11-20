@@ -67,6 +67,10 @@ end
 
 -- The wheel is fixed and cached by the caller. Only dots/lines repaint.
 function M.paint(gc, image, colors, anchor)
+  local markers = {}
+  if type(anchor) == "table" then
+    for _, position in ipairs(anchor) do markers[position] = true end
+  elseif anchor then markers[anchor] = true end
   local radius = (image.width - 1) / 2
   local cx = 99
   local cy = radius + 10
@@ -101,7 +105,7 @@ function M.paint(gc, image, colors, anchor)
   -- Plot swatches and label each corresponding Hue in a compact legend.
   for i, rgb in ipairs(colors) do
     local p = points[i]
-    local size = i == anchor and 12 or 8
+    local size = markers[i] and 12 or 8
     local x = math.floor(p.x - size/2 + 0.5)
     local y = math.floor(p.y - size/2 + 0.5)
 
@@ -115,7 +119,7 @@ function M.paint(gc, image, colors, anchor)
     gc:oval(Rectangle(x,y,size,size))
     gc:fill()
 
-    if i == anchor then
+    if markers[i] then
       gc.color = Color { r=255, g=255, b=255 }
       gc.strokeWidth = 2
       gc:beginPath()
@@ -126,14 +130,14 @@ function M.paint(gc, image, colors, anchor)
     local legendY = 9 + (i-1)*11
     gc.color = Color { r=rgb.r, g=rgb.g, b=rgb.b }
     gc:fillRect(Rectangle(204,legendY,13,9))
-    gc.color = Color { r=215, g=215, b=215 }
-    local symbol = i == anchor and "*" or " "
+    gc.color = app.theme and app.theme.color.text or Color { r=215, g=215, b=215 }
+    local symbol = markers[i] and "*" or " "
     gc:fillText(string.format("%2d%s  %3d deg", i, symbol, math.floor(p.hsv.h+0.5)), 223, legendY-1)
   end
 
-  gc.color = Color { r=175, g=175, b=175 }
+  gc.color = app.theme and app.theme.color.text or Color { r=175, g=175, b=175 }
   gc:fillText("Hue: angle / Saturation: radius", 9, 184)
-  gc:fillText("* = Anchor", 223, 184)
+  gc:fillText(type(anchor) == "table" and "* = Reference slot" or "* = Anchor", 223, 184)
 end
 
 return M

@@ -2,6 +2,16 @@
 
 Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, independent Step Modes, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
 
+## Multi-Anchor (unreleased)
+
+Select **Mode > Multi-Anchor** to generate a ramp from **2–8 color references**. References sort automatically from dark to light. Click a reference swatch to select it, then use its color button to edit it. **Add Anchor** uses the current foreground color; **Remove Anchor** removes the selected reference, down to a minimum of two.
+
+**Target** is the total output count (reference count through 16). Reference slots are evenly distributed across the ramp; when intervals cannot divide evenly, their lengths differ by at most one color. The first and last references guide the dark and light ends. References are soft constraints: output Hue, Chroma and Lightness may all differ from their input colors. There is no center color, Shift Style, Hue Strength, Step Mode or easing in this mode.
+
+The generator fits a smoothed, unwrapped OKLCH hue/chroma path to the ordered references. Neutral references borrow nearby chromatic hue instead of introducing an arbitrary hue. Final sRGB grayscale brightness increases uniformly across a useful tonal range, with gamut compression and reduced chroma near the ends. Extra references guide the path but do not force every hue reversal into the result; contradictory references can still produce bends, so inspect the preview/Color Map.
+
+The **Show HSV map** checkbox expands the optional Color Map. Reference markers indicate their fitted output slots, not exact copies of the reference RGB. Preview edits do not change the sprite; **Add to Palette** appends the current result in one undoable transaction.
+
 This version contains only the ramp generator and palette controls. It makes no network requests, runs no external tools and creates no temporary update files. Install packages manually through Aseprite Preferences > Extensions.
 
 ## Center color placement for even ramps
