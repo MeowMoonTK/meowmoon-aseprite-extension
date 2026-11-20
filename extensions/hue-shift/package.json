@@ -2,7 +2,7 @@
   "name": "meowmoon-hue-shift",
   "displayName": "MeowMoon Hue Shift",
   "description": "Generate Hue Shift Color Ramps and check for updates from the extension panel.",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "author": {
     "name": "MeowMoonTK"
   },

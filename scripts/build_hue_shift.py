@@ -20,6 +20,7 @@ paths = [
     "src/dialog.lua",
     "src/check-release.ps1",
     "src/update.lua",
+    "src/update-dialog.lua",
 ]
 with ZipFile(out, "w", compression=ZIP_DEFLATED) as archive:
     for path in paths:

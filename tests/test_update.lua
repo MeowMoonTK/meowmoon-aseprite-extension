@@ -7,6 +7,7 @@ local function scenario(options)
   local now, path, updater = 1000
   os.time = function() return now end
   os.remove = function(p)
+    if options.reenterCleanup and updater then updater.stop() end
     if options.removeDenied then error('remove denied') end
     files[p] = nil
     return true
@@ -21,12 +22,17 @@ local function scenario(options)
     end
     if not files[p] then return nil, 'No such file', 2 end
     return {read=function()
+      if options.reenterRead then
+        assert(not timers[#timers].active,'Pause polling before gated file reads')
+        timers[#timers].ontick() -- a queued tick from a nested security dialog
+      end
       if options.readThrows then error('read failed') end
       return files[p]
     end, close=function() return true end}
   end
   os.execute = function()
     shells = shells + 1
+    assert(not timers[#timers].active,"Do not poll while execute permission is unresolved")
     if options.shellThrows then error('execute denied') end
     if options.shellFails then return nil, 'exit', 1 end
     return true, 'exit', 0
@@ -51,6 +57,8 @@ local function scenario(options)
     fs={tempPath='C:/Temp Folder', joinPath=function(...) return table.concat({...}, '/') end,
       isFile=function(p) return files[p] ~= nil end}, alert=function() end,
     command={Options=function(args)
+      assert(not timers[#timers].active,'Do not poll inside native/security dialogs')
+      timers[#timers].ontick()
       assert(updater.busy and files[args.installExtension], 'Retain lock and package during installation')
       assert(not updater.checkNow(), 'Nested manual checks must be rejected')
       if options.stopDuringInstall then
@@ -83,7 +91,7 @@ for _, fault in ipairs({'shellThrows','shellFails','openThrows','openDenied','ti
   assert(not s.started and not s.u.busy and s.u.state=='error', fault)
   for _, t in ipairs(s.timers) do assert(not t.active) end
   assert(next(s.files)==nil, fault .. ': clean request')
-  if fault:find('timer') or fault:find('open') then assert(s.shells()==0) end
+  if fault=='timerThrows' or fault:find('open') then assert(s.shells()==0) end
 end
 for _, fault in ipairs({'openThrows','openDenied','readThrows','badJson','timeout'}) do
   local s=scenario()
@@ -106,6 +114,11 @@ for _, fault in ipairs({'none','installThrows','installFalse','installNil','stop
   local expected=(fault=='installThrows' or fault=='installFalse' or fault=='noInstaller') and 'error' or 'installer_closed'
   assert(s.u.state==expected, fault)
   assert(not s.u.launchStatus:find('success'))
+end
+for _, fault in ipairs({'reenterRead','reenterCleanup'}) do
+  local nested=scenario({[fault]=true})
+  nested.deliver({status='up_to_date',message='Already current'})
+  assert(nested.u.state=='up_to_date' and not nested.u.busy and next(nested.files)==nil,fault)
 end
 local s=scenario()
 s.deliver({status='update',version='0.1.8',packagePath='C:/unrelated.aseprite-extension'})

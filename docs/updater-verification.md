@@ -27,6 +27,14 @@ On Windows with Aseprite 1.3.18.6:
 - Built/reinstalled the corrected v0.1.7 package through native confirmation. Clicking the real panel button reached public GitHub Releases and displayed `Installed v0.1.7 is current.` After dismissing the alert, the button is enabled and no `meowmoon-update-*` files remain in Aseprite's actual Windows temp folder.
 - Final source/package/native-installed entries match exactly after the JSON fix.
 
-The public Release is 0.1.6, older than installed source 0.1.7. A real public check should report up to date; a newer-version automatic handoff cannot be claimed from that response. Download/verification and installer handoff have automated coverage; full newer-version upgrade/cancel and plugin-preference retention remain separate integration cases.
+At the time of the v0.1.7 live test, the public Release was 0.1.6. Release v0.1.7 was subsequently published on 2026-11-20. That earlier public check correctly reported up to date; a newer-version automatic handoff cannot be claimed from that response. Download/verification and installer handoff have automated coverage; full newer-version upgrade/cancel and plugin-preference retention remain separate integration cases.
 
 Permission dialogs must be handled by the user. No Aseprite script security bypass is used.
+
+## v0.1.8 development
+
+Updates now has its own modeless window, separate from palette actions. It subscribes to the updater state while open; closing and reopening during a fetch resumes displaying the result without launching another check. Results/errors stay in that window rather than opening alerts or the Lua console.
+
+The first source preview produced repeated `C stack overflow` messages while an execute-permission dialog was open. That isolated preview process was terminated. Polling is now started only after os.execute returns, paused before gated reads, and guarded against nested ticks. Cleanup is also guarded against recursive entry. Regression tests cover unresolved execute permission, nested read/native-dialog ticks and reentrant cleanup, and pass both in Lua 5.4 and Aseprite's batch runtime with its native JSON decoder.
+
+The repaired v0.1.8 GUI has not been reopened or visually verified. No v0.1.8 Release has been published. The published v0.1.7 assets have not been replaced.

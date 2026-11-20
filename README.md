@@ -4,15 +4,17 @@ Public repository containing independent Aseprite extensions.
 
 | Extension | Latest Release | Source |
 | --- | --- | --- |
-| Hue Shift | [v0.1.5](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.5) | [extensions/hue-shift](extensions/hue-shift) |
+| Hue Shift | [v0.1.7](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.7) | [extensions/hue-shift](extensions/hue-shift) |
 
 ## Hue Shift
 
 Generates color ramps with six hue-shift styles, an HSV Color Map preview, and an Add to Palette action.
 
-**Windows updates:** Click **Check Updates** in the extension panel. It checks public GitHub Releases, downloads and verifies newer packages, then opens Aseprite's native upgrade confirmation. Restart after accepting. No checks run on startup. No GitHub CLI, authentication, scheduled tasks or external updater extension is needed.
+**Windows updates:** Open **Updates...** in the extension panel, then click **Check Updates** in its separate window. It checks public GitHub Releases, downloads and verifies newer packages, then opens Aseprite's native upgrade confirmation. Restart after accepting. No checks run on startup. No GitHub CLI, authentication, scheduled tasks or external updater extension is needed.
 
 **Build policy:** GitHub Actions runs tests only. Package builds and GitHub Releases are made **only on explicit request**.
+
+Source development is now **v0.1.8**; the published release is **v0.1.7**.
 
 ### Developer build (manual only)
 

@@ -126,12 +126,12 @@ function M.paint(gc, image, colors, anchor)
     local legendY = 9 + (i-1)*11
     gc.color = Color { r=rgb.r, g=rgb.g, b=rgb.b }
     gc:fillRect(Rectangle(204,legendY,13,9))
-    gc.color = Color { r=215, g=215, b=215 }
+    gc.color = app.theme and app.theme.color.text or Color { r=215, g=215, b=215 }
     local symbol = i == anchor and "*" or " "
     gc:fillText(string.format("%2d%s  %3d deg", i, symbol, math.floor(p.hsv.h+0.5)), 223, legendY-1)
   end
 
-  gc.color = Color { r=175, g=175, b=175 }
+  gc.color = app.theme and app.theme.color.text or Color { r=175, g=175, b=175 }
   gc:fillText("Hue: angle / Saturation: radius", 9, 184)
   gc:fillText("* = Anchor", 223, 184)
 end

@@ -1,5 +1,6 @@
 -- Hue Shift version is read from plugin.version.
 local activeUpdater
+local activeUpdatesDialog
 
 function init(plugin)
   local root=plugin.path
@@ -8,6 +9,8 @@ function init(plugin)
   local palette=dofile(app.fs.joinPath(root,"src","palette.lua"))
   local wheel=dofile(app.fs.joinPath(root,"src","wheel.lua"))
   local dialog=dofile(app.fs.joinPath(root,"src","dialog.lua"))
+  local updatesDialog=dofile(app.fs.joinPath(root,"src","update-dialog.lua"))
+  activeUpdatesDialog=updatesDialog
   local updater=dofile(app.fs.joinPath(root,"src","update.lua"))(root,plugin.version)
   activeUpdater=updater
 
@@ -16,25 +19,25 @@ function init(plugin)
     title="Hue Shift: Generate Ramp",
     group="file_scripts",
     onclick=function()
-      dialog.open(ramp,palette,wheel,plugin.version,updater)
+      dialog.open(ramp,palette,wheel,plugin.version,updater,updatesDialog)
     end
   }
   plugin:newCommand{
     id="MeowMoonCheckHueShiftUpdates",
-    title="Hue Shift: Check Updates",
+    title="Hue Shift: Updates",
     group="file_scripts",
     onclick=function()
       if not (app.os and app.os.windows) then
         app.alert("Hue Shift updater currently supports Windows only.")
         return
       end
-      local ok, message=updater.checkNow()
-      if not ok then app.alert{title="Hue Shift Updates",text=message} end
+      updatesDialog.open(updater,plugin.version)
     end
   }
 end
 
 function exit(plugin)
+  if activeUpdatesDialog then activeUpdatesDialog.close();activeUpdatesDialog=nil end
   if activeUpdater then
     activeUpdater.stop()
     activeUpdater=nil

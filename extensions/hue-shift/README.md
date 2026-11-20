@@ -1,6 +1,12 @@
-# MeowMoon Hue Shift v0.1.7 (source)
+# MeowMoon Hue Shift v0.1.8 (development)
 
 Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, independent Step Modes, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
+
+## v0.1.8 panel work
+
+Ramp settings and preview are grouped separately. The main panel keeps **Add to Palette** and **Close** as its action row; **Updates...** belongs to the version/header area and opens a compact modeless window with its own status and Check Updates button. Long status messages wrap in that window. The Color Map is available through **Show Color Map** and starts collapsed so the default panel fits smaller windows.
+
+Published release: [v0.1.7](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.7). Version 0.1.8 is development source only.
 
 ## Center color placement for even ramps
 
@@ -22,7 +28,7 @@ Step Mode now controls the **grayscale value of each final RGB color** (0–255 
 
 Hue Shift does not check for updates when Aseprite starts or when the panel opens.
 
-1. Click **Check Updates** in the Hue Shift panel (or use File > Scripts > Hue Shift: Check Updates).
+1. Open **Updates...** near the version in the Hue Shift panel (or File > Scripts > Hue Shift: Updates), then click **Check Updates** in its separate window.
 2. One background PowerShell process checks stable public GitHub Releases. If newer, it downloads the package and SHA-256 file and verifies the checksum, ZIP entries and extension identity/version.
 3. Aseprite opens Preferences > Extensions and asks to replace the installed extension. Accept or cancel there.
 4. Close Preferences. If accepted, restart Aseprite and check the version shown in the Hue Shift panel.
@@ -31,7 +37,7 @@ Only Aseprite's [native Options command](https://aseprite.org/api/command/Option
 
 The button is disabled during a check/installer. Three HTTP requests use .NET HttpClient's 30-second full-response timeout; Lua stops polling after 120 seconds. Errors end the check and leave color generation available. The package is retained until the native command returns, including plugin unload during an upgrade; then the request/package are removed. Removing the request also prevents late results after cancellation. No supervisor, child job, scheduled task, or separate updater extension is used.
 
-Aseprite may ask for script file/execute permissions on the first manual check. Declining permissions must leave ramp generation usable. Check errors appear in the panel and an alert; temporary-file cleanup failures appear in status. Forced shutdown or denied deletion can leave temporary files for OS/user cleanup.
+Aseprite may ask for script file/execute permissions on the first manual check. Declining permissions must leave ramp generation usable. Results and errors stay in the Updates window, without extra alerts. Closing that window leaves the current check running in the background; reopening it shows the current state. Temporary-file cleanup failures appear in status. Forced shutdown or denied deletion can leave temporary files for OS/user cleanup.
 
 Releases v0.1.5/v0.1.6 contain the old self-updater. Install the first version containing this replacement through Preferences > Extensions > Add Extension once. They cannot reliably bootstrap the replacement themselves.
 

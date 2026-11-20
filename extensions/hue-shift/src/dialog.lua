@@ -1,7 +1,7 @@
 -- Native Aseprite Color Ramp dialog with HSV wheel overview.
 local M = {}
 
-function M.open(ramp, paletteWriter, wheel, version, updater)
+function M.open(ramp, paletteWriter, wheel, version, updater, updatesDialog)
   if not app.isUIAvailable then return end
 
   local picked = app.fgColor
@@ -17,6 +17,15 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
   -- Wheel pixels are computed once; repaint only the dots and path.
   local wheelImage = wheel.make_image(80)
   local dlg = Dialog{ title = "MeowMoon Hue Shift" }
+
+  dlg:label{label="Version:", text="v" .. tostring(version or "unknown")}
+  if updater and updatesDialog and app.os and app.os.windows then
+    dlg:button{id="updates",text="Updates...",onclick=function()
+      updatesDialog.open(updater,version)
+    end}
+  end
+  dlg:newrow()
+  dlg:separator{text="Ramp Settings"}
 
   local function recompute()
     local data = dlg.data
@@ -66,10 +75,11 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
     label = "Strength:",
     text = "0% = no Hue shift; 100% = full style rotation"
   }
+  dlg:separator{text="Preview"}
   dlg:canvas{
     id = "preview",
     label = "Ramp:",
-    width = 360,
+    width = 340,
     height = 65,
     autoscaling = true,
     onpaint = function(ev)
@@ -89,58 +99,32 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
           gc:strokeRect(Rectangle(left, y, math.max(1, right-left-gap), h))
         end
       end
-      gc.color = Color{ r = 190, g = 190, b = 190 }
+      gc.color = app.theme and app.theme.color.text or Color{ r = 190, g = 190, b = 190 }
       gc:fillText("Shadow", gutter, 49)
       gc:fillText("Anchor #" .. anchor, math.floor(gc.width * 0.42), 49)
       gc:fillText("Light", gc.width - 45, 49)
     end
   }
+  dlg:check{id="show_map",text="Show Color Map",selected=false,onclick=function()
+    dlg:modify{id="hue_wheel",visible=dlg.data.show_map}
+  end}
   dlg:canvas{
     id = "hue_wheel",
+    visible = false,
     label = "Color Map:",
-    width = 360,
+    width = 340,
     height = 201,
     autoscaling = true,
     onpaint = function(ev)
       wheel.paint(ev.context, wheelImage, preview, anchor)
     end
   }
+  dlg:separator{}
   dlg:label{
     id = "status",
     label = "Status:",
     text = "Preview only. No sprite changes yet."
   }
-  dlg:label{
-    label = "Version:",
-    text = "v" .. tostring(version or "unknown")
-  }
-  if updater and app.os and app.os.windows then
-    dlg:label{
-      id = "update_status",
-      label = "Updates:",
-      text = updater.launchStatus
-    }
-    dlg:button{
-      id = "update",
-      text = "Check Updates",
-      enabled = not updater.busy,
-      onclick = function()
-        dlg:modify{ id = "update", enabled = false }
-        dlg:modify{ id = "update_status", text = "Checking releases..." }
-        local ok, message = updater.checkNow(function(kind, status)
-          pcall(function()
-            dlg:modify{ id = "update_status", text = status }
-            dlg:modify{ id = "update", enabled = kind ~= "verified" and kind ~= "checking" }
-          end)
-        end)
-        if not ok then
-          dlg:modify{ id = "update", enabled = not updater.busy }
-          dlg:modify{ id = "update_status", text = message }
-          app.alert{ title = "Hue Shift Updates", text = message }
-        end
-      end
-    }
-  end
   dlg:button{
     id = "apply",
     text = "Add to Palette",
