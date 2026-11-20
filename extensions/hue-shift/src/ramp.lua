@@ -81,8 +81,9 @@ return function(colorMath)
     return best
   end
 
-  -- Copy and order references; editing/generating must never mutate callers.
-  function M.order_anchors(anchors)
+  -- Slots describe positions along the output ramp, not the input brightness.
+  -- Validate/copy without sorting: reference edits must not change their roles.
+  local function copy_anchors(anchors)
     assert(type(anchors) == "table" and #anchors >= 2 and #anchors <= 8,
       "anchors must contain 2..8 colors")
     local ordered = {}
@@ -96,13 +97,6 @@ return function(colorMath)
       end
       ordered[i] = copy
     end
-    table.sort(ordered, function(a, b)
-      local ga, gb = colorMath.rgb_to_grayscale(a), colorMath.rgb_to_grayscale(b)
-      if ga ~= gb then return ga < gb end
-      if a.r ~= b.r then return a.r < b.r end
-      if a.g ~= b.g then return a.g < b.g end
-      return a.b < b.b
-    end)
     return ordered
   end
 
@@ -132,7 +126,7 @@ return function(colorMath)
   end
 
   local function generate_multi(opts)
-    local refs = M.order_anchors(opts.anchors)
+    local refs = copy_anchors(opts.anchors)
     local m, n = #refs, tonumber(opts.count)
     assert(n and n == math.floor(n) and n >= m and n <= 16,
       "Target must be between the anchor count and 16")

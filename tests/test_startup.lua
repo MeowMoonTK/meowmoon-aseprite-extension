@@ -75,17 +75,33 @@ assert(not panel.widgets.hue_wheel.visible)
 for _=1,7 do panel.widgets.add_anchor.onclick() end
 assert(#panel.widgets.references.colors==8 and not panel.widgets.add_anchor.enabled)
 assert(panel.widgets.count.min==8 and panel.data.count==8)
+assert(panel.widgets.reference_color.label=='Anchor #8:','New anchor must select its own appended slot')
+local first=panel.widgets.references.colors[1]
+panel.data.reference_color=first
+panel.widgets.reference_color.onchange()
+assert(panel.widgets.reference_color.label=='Anchor #8:','Matching another RGB must not change selection')
+panel.data.reference_color=Color{r=0,g=0,b=0}
+panel.widgets.reference_color.onchange()
+assert(panel.widgets.reference_color.label=='Anchor #8:','Dark edit must stay in slot 8')
+assert(panel.widgets.references.colors[1].red==first.red)
+assert(panel.widgets.references.colors[8].red==0 and panel.widgets.references.colors[8].blue==0)
 panel.widgets.apply.onclick()
 assert(palette.size==18 and transactions==2 and refreshes==2)
 for _=1,6 do panel.widgets.remove_anchor.onclick() end
 assert(panel.widgets.count.min==2 and not panel.widgets.remove_anchor.enabled)
 panel.widgets.remove_anchor.onclick() -- guard even when the UI button is disabled
 panel.data.count=2;panel.widgets.count.onchange()
-panel.data.reference_color=Color{r=255,g=255,b=255}
-panel.widgets.reference_color.onchange()
-assert(panel.widgets.references.colors[2].red==255,'Edited references must reorder dark to light')
 panel.widgets.references.onclick{color=panel.widgets.references.colors[1]}
 assert(panel.widgets.reference_color.label=='Anchor #1:')
+local second=panel.widgets.references.colors[2]
+for _,c in ipairs({Color{r=255,g=255,b=255},Color{r=0,g=0,b=0},Color{r=0,g=0,b=139}}) do
+  panel.data.reference_color=c
+  panel.widgets.reference_color.onchange()
+  local colors=panel.widgets.references.colors
+  assert(colors[1].red==c.red and colors[1].green==c.green and colors[1].blue==c.blue)
+  assert(colors[2].red==second.red and colors[2].green==second.green and colors[2].blue==second.blue)
+  assert(panel.widgets.reference_color.label=='Anchor #1:','Editing must preserve selected slot')
+end
 panel.widgets.apply.onclick()
 assert(palette.size==20 and transactions==3)
 panel.data.mode='Single Color';panel.widgets.mode.onchange()
@@ -98,4 +114,4 @@ app.isUIAvailable=false
 commands[1].onclick()
 assert(panel==nil,'Headless mode must not open a panel')
 os.execute,io.popen,io.open,os.remove=originalExecute,originalPopen,originalOpen,originalRemove
-print('OK: startup, both modes, 2-8 references, Target, reorder and palette append; no tools/timers/files')
+print('OK: startup, both modes, 2-8 stable reference slots, duplicate edits, Target and palette append; no tools/timers/files')

@@ -18,7 +18,7 @@ function M.open(ramp, paletteWriter, wheel, version)
   -- Wheel pixels are computed once; repaint only the dots and path.
   local wheelImage = wheel.make_image(80)
   local dlg = Dialog{ title = "MeowMoon Hue Shift" }
-  local references = ramp.order_anchors({{r=73,g=51,b=86}, center, {r=246,g=214,b=139}})
+  local references = {{r=73,g=51,b=86}, center, {r=246,g=214,b=139}}
   local selectedReference = 1
   local syncing = false
   local singleControls = {"center", "style", "step_mode", "strength", "strength_help"}
@@ -67,7 +67,7 @@ function M.open(ramp, paletteWriter, wheel, version)
     end
   }
   dlg:label{ id="anchor_help", label="Dark -> Light:",
-    text="2-8 references; output colors may change.", visible=false }
+    text="Fixed reference slots; output colors may change.", visible=false }
   local function select_color(c)
     for i, rgb in ipairs(references) do
       if rgb.r == c.red and rgb.g == c.green and rgb.b == c.blue then
@@ -87,8 +87,6 @@ function M.open(ramp, paletteWriter, wheel, version)
       if syncing then return end
       local c = dlg.data.reference_color
       references[selectedReference] = {r=c.red,g=c.green,b=c.blue}
-      references = ramp.order_anchors(references)
-      select_color(c)
       sync_references()
       recompute()
     end
@@ -99,8 +97,7 @@ function M.open(ramp, paletteWriter, wheel, version)
       if #references >= 8 then return end
       local c = app.fgColor
       references[#references+1] = {r=c.red,g=c.green,b=c.blue}
-      references = ramp.order_anchors(references)
-      select_color(c)
+      selectedReference = #references
       sync_references()
       recompute()
     end

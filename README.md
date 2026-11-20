@@ -8,7 +8,7 @@ Public repository containing independent Aseprite extensions.
 
 ## Hue Shift
 
-Generates color ramps with six single-color hue-shift styles, an HSV Color Map preview, and an Add to Palette action. **Multi-Anchor** uses 2–8 soft color references, ordered dark to light, with a Target color count.
+Generates color ramps with six single-color hue-shift styles, an HSV Color Map preview, and an Add to Palette action. **Multi-Anchor** uses 2–8 soft color references in fixed slots, with a Target color count and dark-to-light output.
 
 Source retains the core ramp generator, preview/Color Map and Add to Palette action. The updater and all related commands, scripts and UI have been removed. Install packages manually through Aseprite Preferences > Extensions.
 
