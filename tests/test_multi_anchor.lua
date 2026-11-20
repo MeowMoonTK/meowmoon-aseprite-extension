@@ -40,10 +40,9 @@ for m=2,8 do
           or {r=math.random(0,255),g=math.random(0,255),b=math.random(0,255)}
       end
       local result=check(refs,n)
-      local reverse={};for i=m,1,-1 do reverse[#reverse+1]=refs[i] end
-      local reversed=generate(reverse,n,{style='invalid',stepMode='invalid',strength=-100})
+      local unchanged=generate(refs,n,{style='invalid',stepMode='invalid',strength=-100})
       for i=1,n do
-        for _,c in ipairs({'r','g','b'}) do assert(result[i][c]==reversed[i][c]) end
+        for _,c in ipairs({'r','g','b'}) do assert(result[i][c]==unchanged[i][c]) end
       end
       cases=cases+1
     end
@@ -74,9 +73,19 @@ local function hue_travel(colors)
   end
   return total
 end
-local sorted=ramp.order_anchors(alternating)
-assert(hue_travel(generate(alternating,16)) < hue_travel(sorted)*.65,
+assert(hue_travel(generate(alternating,16)) < hue_travel(alternating)*.65,
   'Soft reference fitting must damp repeated hue reversals')
+-- Input brightness may contradict slot roles. Keep the requested hue order
+-- while fitting output brightness, instead of secretly sorting in generation.
+local bright=color.oklch_to_rgb(.75,.12,20)
+local dark=color.oklch_to_rgb(.35,.12,250)
+local forward,slots=generate({bright,dark},9)
+local backward=generate({dark,bright},9)
+check({bright,dark},9)
+local function hue_distance(a,b) return math.abs((a-b+540)%360-180) end
+assert(hue_distance(color.rgb_to_oklch(forward[1]).h,color.rgb_to_oklch(bright).h)<5)
+assert(hue_distance(color.rgb_to_oklch(backward[1]).h,color.rgb_to_oklch(dark).h)<5)
+assert(slots[1]==1 and slots[2]==9)
 for _,case in ipairs({{{refs[1]},3}, {refs,2}, {refs,17}, {refs,3.5},
   {{{r=-1,g=0,b=0},refs[1]},4}}) do
   assert(not pcall(generate,case[1],case[2]),'Invalid input must be rejected')
