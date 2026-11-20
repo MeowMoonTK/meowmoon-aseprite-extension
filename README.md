@@ -4,7 +4,7 @@ Public repository containing independent Aseprite extensions.
 
 | Extension | Latest Release | Source |
 | --- | --- | --- |
-| Hue Shift | [v0.1.9](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.9) | [extensions/hue-shift](extensions/hue-shift) |
+| Hue Shift | [v0.1.10](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.10) | [extensions/hue-shift](extensions/hue-shift) |
 
 ## Hue Shift
 
@@ -12,7 +12,7 @@ Generates color ramps with six single-color hue-shift styles, an HSV Color Map p
 
 Source retains the core ramp generator, preview/Color Map and Add to Palette action. The updater and all related commands, scripts and UI have been removed. Install packages manually through Aseprite Preferences > Extensions.
 
-**v0.1.9** adds Multi-Anchor and a compact reference editor, with an optional HSV Color Map.
+**v0.1.10** keeps Anchor slots stable during color edits and adds drag-to-reorder with a persistent selection highlight. Outside drops and interrupted drags cancel safely. The optional HSV Color Map remains available.
 
 **Build policy:** GitHub Actions runs tests only. Package builds and GitHub Releases are made **only on explicit request**.
 
