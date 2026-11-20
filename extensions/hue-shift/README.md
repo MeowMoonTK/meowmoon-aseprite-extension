@@ -1,4 +1,4 @@
-# MeowMoon Hue Shift v0.1.9
+# MeowMoon Hue Shift v0.1.10
 
 Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, independent Step Modes, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
 

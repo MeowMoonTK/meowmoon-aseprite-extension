@@ -59,7 +59,7 @@ Dialog=function()
     end
   end})
 end
-local plugin={path='extensions/hue-shift',version='0.1.9',newCommand=function(_,spec) commands[#commands+1]=spec end}
+local plugin={path='extensions/hue-shift',version='0.1.10',newCommand=function(_,spec) commands[#commands+1]=spec end}
 dofile('extensions/hue-shift/main.lua')
 init(plugin)
 assert(#commands==1 and commands[1].id=='MeowMoonGenerateHueShiftRamp')
