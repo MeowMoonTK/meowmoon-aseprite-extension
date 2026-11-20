@@ -1,5 +1,6 @@
 -- Hue Shift version is read from plugin.version.
 local startupTimer
+local activeUpdater
 
 function init(plugin)
   local root=plugin.path
@@ -8,7 +9,8 @@ function init(plugin)
   local palette=dofile(app.fs.joinPath(root,"src","palette.lua"))
   local wheel=dofile(app.fs.joinPath(root,"src","wheel.lua"))
   local dialog=dofile(app.fs.joinPath(root,"src","dialog.lua"))
-  local updater=dofile(app.fs.joinPath(root,"src","update.lua"))(root)
+  local updater=dofile(app.fs.joinPath(root,"src","update.lua"))(root,plugin.version)
+  activeUpdater=updater
 
   plugin:newCommand{
     id="MeowMoonGenerateHueShiftRamp",
@@ -27,11 +29,8 @@ function init(plugin)
         app.alert("Hue Shift updater currently supports Windows only.")
         return
       end
-      local ok,message=updater.checkNow()
-      app.alert{
-        title=ok and "Hue Shift Update Check" or "Hue Shift Update Error",
-        text=message.."\nLog: "..updater.logPath
-      }
+      local ok, message=updater.checkNow()
+      if not ok then app.alert{title="Hue Shift Updates",text=message} end
     end
   }
 
@@ -57,5 +56,9 @@ function exit(plugin)
   if startupTimer then
     startupTimer:stop()
     startupTimer=nil
+  end
+  if activeUpdater then
+    activeUpdater.stop()
+    activeUpdater=nil
   end
 end
