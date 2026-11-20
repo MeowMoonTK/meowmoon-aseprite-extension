@@ -67,7 +67,7 @@ function M.open(ramp, paletteWriter, wheel, version)
     end
   }
   dlg:label{ id="anchor_help", label="Dark -> Light:",
-    text="Fixed reference slots; output colors may change.", visible=false }
+    text="Drag references to reorder; click to edit.", visible=false }
   local function select_color(c)
     for i, rgb in ipairs(references) do
       if rgb.r == c.red and rgb.g == c.green and rgb.b == c.blue then
@@ -77,8 +77,23 @@ function M.open(ramp, paletteWriter, wheel, version)
     end
   end
   dlg:shades{
-    id="references", label="References:", mode="pick", colors={}, visible=false,
-    onclick=function(ev) select_color(ev.color); sync_references() end
+    id="references", label="References:", mode="sort", colors={}, visible=false,
+    onclick=function(ev)
+      if syncing then return end
+      local colors = dlg.data.references
+      -- Native shades removes a color when dropped outside the strip. A drag
+      -- here only reorders: restore the strip on an outside drop, even at 2.
+      if type(colors) ~= "table" or #colors ~= #references then
+        sync_references()
+        return
+      end
+      local reordered = {}
+      for i, c in ipairs(colors) do reordered[i] = {r=c.red,g=c.green,b=c.blue} end
+      references = reordered
+      if ev.color then select_color(ev.color) end
+      sync_references()
+      recompute()
+    end
   }
   dlg:color{
     id="reference_color", label="Anchor #1:", visible=false,

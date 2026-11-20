@@ -26,6 +26,7 @@ Dialog=function()
     for k,v in pairs(spec) do widget[k]=v end
     if spec.color then self.data[spec.id]=spec.color end
     if spec.value then self.data[spec.id]=spec.value end
+    if spec.colors then self.data[spec.id]=spec.colors end
   end
   function panel:show(spec) self.shown=true;assert(spec.wait==false) end
   return setmetatable(panel,{__index=function(_,kind)
@@ -66,6 +67,23 @@ for _,id in ipairs({'center','style','step_mode','strength','strength_help'}) do
   assert(panel.widgets[id].visible==false, id..' must be hidden')
 end
 assert(panel.widgets.anchor_help.visible and #panel.widgets.references.colors==3)
+assert(panel.widgets.references.mode=='sort','Use native Aseprite drag/drop shades')
+local original=panel.widgets.references.colors
+panel.data.references={original[3],original[1],original[2]}
+panel.widgets.references.onclick{color=original[3]}
+local reordered=panel.widgets.references.colors
+assert(reordered[1].red==original[3].red and reordered[2].red==original[1].red
+  and reordered[3].red==original[2].red,'Drag must update reference order')
+assert(panel.widgets.reference_color.label=='Anchor #1:','Select the dragged reference')
+panel.data.reference_color=Color{r=1,g=2,b=3}
+panel.widgets.reference_color.onchange()
+assert(panel.widgets.references.colors[1].red==1 and panel.widgets.references.colors[2].red==original[1].red,
+  'Edit after drag must update its new slot')
+local beforeOutside=panel.widgets.references.colors
+panel.data.references={beforeOutside[1],beforeOutside[2]} -- native outside drop deletes a color
+panel.widgets.references.onclick{}
+assert(#panel.widgets.references.colors==3 and panel.widgets.references.colors[3].red==beforeOutside[3].red,
+  'Outside drop must restore reference count and order')
 panel.widgets.preview.onpaint{context=gc}
 panel.widgets.hue_wheel.onpaint{context=gc}
 panel.data.show_map=true;panel.widgets.show_map.onclick()
@@ -89,6 +107,14 @@ panel.widgets.apply.onclick()
 assert(palette.size==18 and transactions==2 and refreshes==2)
 for _=1,6 do panel.widgets.remove_anchor.onclick() end
 assert(panel.widgets.count.min==2 and not panel.widgets.remove_anchor.enabled)
+local two=panel.widgets.references.colors
+panel.data.references={two[2],two[1]}
+panel.widgets.references.onclick{color=two[1]}
+assert(panel.widgets.references.colors[2].red==two[1].red)
+assert(panel.widgets.reference_color.label=='Anchor #2:')
+panel.data.references={two[2]}
+panel.widgets.references.onclick{}
+assert(#panel.widgets.references.colors==2,'Outside drop must not bypass two-anchor minimum')
 panel.widgets.remove_anchor.onclick() -- guard even when the UI button is disabled
 panel.data.count=2;panel.widgets.count.onchange()
 panel.widgets.references.onclick{color=panel.widgets.references.colors[1]}
@@ -114,4 +140,4 @@ app.isUIAvailable=false
 commands[1].onclick()
 assert(panel==nil,'Headless mode must not open a panel')
 os.execute,io.popen,io.open,os.remove=originalExecute,originalPopen,originalOpen,originalRemove
-print('OK: startup, both modes, 2-8 stable reference slots, duplicate edits, Target and palette append; no tools/timers/files')
+print('OK: startup, both modes, native drag reorder/outside restore, stable edits, Target and palette append; no tools/timers/files')
