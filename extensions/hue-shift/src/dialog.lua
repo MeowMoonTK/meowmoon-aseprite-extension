@@ -20,6 +20,8 @@ function M.open(ramp, paletteWriter, wheel, version)
   local dlg = Dialog{ title = "MeowMoon Hue Shift" }
   local references = {{r=73,g=51,b=86}, center, {r=246,g=214,b=139}}
   local selectedReference = 1
+  local barWidth, barHeight = 360, 30
+  local dragFrom, dragTo
   local syncing = false
   local singleControls = {"center", "style", "step_mode", "strength", "strength_help"}
 
@@ -28,11 +30,10 @@ function M.open(ramp, paletteWriter, wheel, version)
     local multi = opts.mode == "Multi-Anchor"
     dlg:modify{ id="anchor_help", visible=multi }
     selectedReference = math.min(selectedReference, #references)
-    local swatches = {}
-    for i, rgb in ipairs(references) do swatches[i] = Color{r=rgb.r,g=rgb.g,b=rgb.b} end
-    dlg:modify{ id="references", visible=multi, colors=swatches }
+    local rgb = references[selectedReference]
+    dlg:modify{ id="references", visible=multi }
     dlg:modify{ id="reference_color", visible=multi, label="Anchor #"..selectedReference..":",
-      color=swatches[selectedReference] }
+      color=Color{r=rgb.r,g=rgb.g,b=rgb.b} }
     dlg:modify{ id="remove_anchor", visible=multi, enabled=#references > 2 }
     dlg:modify{ id="add_anchor", visible=multi, enabled=#references < 8 }
     for _, id in ipairs(singleControls) do dlg:modify{ id=id, visible=not multi } end
@@ -40,6 +41,7 @@ function M.open(ramp, paletteWriter, wheel, version)
     opts.count = math.max(opts.count, minimum)
     dlg:modify{ id="count", label=multi and "Target:" or "Colors:", min=minimum, value=opts.count }
     syncing = false
+    dlg:repaint()
   end
 
   local function recompute()
@@ -62,35 +64,65 @@ function M.open(ramp, paletteWriter, wheel, version)
     onchange=function()
       if syncing then return end
       opts.mode = dlg.data.mode
+      dragFrom, dragTo = nil, nil
       sync_references()
       recompute()
     end
   }
   dlg:label{ id="anchor_help", label="Dark -> Light:",
     text="Drag references to reorder; click to edit.", visible=false }
-  local function select_color(c)
-    for i, rgb in ipairs(references) do
-      if rgb.r == c.red and rgb.g == c.green and rgb.b == c.blue then
-        selectedReference = i
-        break
-      end
+  local function reference_at(ev)
+    if ev.x < 2 or ev.x >= barWidth-2 or ev.y < 0 or ev.y >= barHeight then return nil end
+    for i = 1, #references do
+      if ev.x < 2 + math.floor(i*(barWidth-4)/#references) then return i end
     end
   end
-  dlg:shades{
-    id="references", label="References:", mode="sort", colors={}, visible=false,
-    onclick=function(ev)
-      if syncing then return end
-      local colors = dlg.data.references
-      -- Native shades removes a color when dropped outside the strip. A drag
-      -- here only reorders: restore the strip on an outside drop, even at 2.
-      if type(colors) ~= "table" or #colors ~= #references then
-        sync_references()
-        return
+  dlg:canvas{
+    id="references", label="References:", width=360, height=34, autoscaling=true, visible=false,
+    onpaint=function(ev)
+      local gc = ev.context
+      barWidth, barHeight = gc.width, gc.height
+      local display = {}
+      for i, rgb in ipairs(references) do display[i] = rgb end
+      if dragFrom and dragTo then table.insert(display, dragTo, table.remove(display, dragFrom)) end
+      for i, rgb in ipairs(display) do
+        local left = 2 + math.floor((i-1)*(barWidth-4)/#display)
+        local right = 2 + math.floor(i*(barWidth-4)/#display)
+        gc.color = Color{r=rgb.r,g=rgb.g,b=rgb.b}
+        gc:fillRect(Rectangle(left, 2, right-left-2, 17))
+        if i == (dragTo or selectedReference) then
+          -- Two contrasting outlines stay visible on black, white and vivid
+          -- references. Selection is by slot, never by RGB equality.
+          gc.strokeWidth = 1
+          gc.color = Color{r=0,g=0,b=0}
+          gc:strokeRect(Rectangle(left-1, 1, right-left, 19))
+          gc.color = Color{r=255,g=255,b=255}
+          gc:strokeRect(Rectangle(left, 2, right-left-2, 17))
+        end
+        gc.color = app.theme and app.theme.color.text or Color{r=190,g=190,b=190}
+        gc:fillText(tostring(i), math.floor((left+right)/2)-2, 21)
       end
-      local reordered = {}
-      for i, c in ipairs(colors) do reordered[i] = {r=c.red,g=c.green,b=c.blue} end
-      references = reordered
-      if ev.color then select_color(ev.color) end
+    end,
+    onmousedown=function(ev)
+      if ev.button ~= MouseButton.LEFT then return end
+      local index = reference_at(ev)
+      if not index then return end
+      selectedReference, dragFrom, dragTo = index, index, index
+      sync_references()
+    end,
+    onmousemove=function(ev)
+      if not dragFrom then return end
+      dragTo = reference_at(ev)
+      dlg:repaint()
+    end,
+    onmouseup=function(ev)
+      if ev.button ~= MouseButton.LEFT or not dragFrom then return end
+      local destination = reference_at(ev)
+      if destination then
+        table.insert(references, destination, table.remove(references, dragFrom))
+        selectedReference = destination
+      end
+      dragFrom, dragTo = nil, nil
       sync_references()
       recompute()
     end

@@ -16,9 +16,27 @@ app={isUIAvailable=true,os={windows=true},
   alert=function() error('No alert expected') end}
 Color=function(c) return {red=c.r or c.red,green=c.g or c.green,blue=c.b or c.blue,alpha=c.a or 255} end
 ColorMode={RGB=0}
+MouseButton={LEFT=1,RIGHT=2}
 Image=function(w,h) return {width=w,height=h,drawPixel=function() end} end
 Rectangle=function(...) return {...} end
 local gc=setmetatable({width=360,height=201},{__index=function() return function() end end})
+local function bar_colors()
+  local colors, outlines = {}, {}
+  local barGC=setmetatable({width=360,height=30},{__index=function() return function() end end})
+  function barGC:fillRect() colors[#colors+1]=self.color end
+  function barGC:strokeRect(rect) outlines[#outlines+1]=rect end
+  panel.widgets.references.onpaint{context=barGC}
+  return colors,outlines
+end
+local function bar_event(index)
+  local colors=bar_colors()
+  return {x=2+(index-.5)*356/#colors,y=10,button=MouseButton.LEFT}
+end
+local function move_reference(from,to)
+  panel.widgets.references.onmousedown(bar_event(from))
+  panel.widgets.references.onmousemove(bar_event(to))
+  panel.widgets.references.onmouseup(bar_event(to))
+end
 Dialog=function()
   panel={widgets={},data={},shown=false}
   function panel:modify(spec)
@@ -66,23 +84,23 @@ panel.widgets.mode.onchange()
 for _,id in ipairs({'center','style','step_mode','strength','strength_help'}) do
   assert(panel.widgets[id].visible==false, id..' must be hidden')
 end
-assert(panel.widgets.anchor_help.visible and #panel.widgets.references.colors==3)
-assert(panel.widgets.references.mode=='sort','Use native Aseprite drag/drop shades')
-local original=panel.widgets.references.colors
-panel.data.references={original[3],original[1],original[2]}
-panel.widgets.references.onclick{color=original[3]}
-local reordered=panel.widgets.references.colors
+assert(panel.widgets.anchor_help.visible and #bar_colors()==3)
+local original=bar_colors()
+move_reference(3,1)
+local reordered,outlines=bar_colors()
+assert(#outlines==2 and outlines[1][1]==1,'Selected slot must have a persistent double outline')
 assert(reordered[1].red==original[3].red and reordered[2].red==original[1].red
   and reordered[3].red==original[2].red,'Drag must update reference order')
 assert(panel.widgets.reference_color.label=='Anchor #1:','Select the dragged reference')
 panel.data.reference_color=Color{r=1,g=2,b=3}
 panel.widgets.reference_color.onchange()
-assert(panel.widgets.references.colors[1].red==1 and panel.widgets.references.colors[2].red==original[1].red,
+assert(bar_colors()[1].red==1 and bar_colors()[2].red==original[1].red,
   'Edit after drag must update its new slot')
-local beforeOutside=panel.widgets.references.colors
-panel.data.references={beforeOutside[1],beforeOutside[2]} -- native outside drop deletes a color
-panel.widgets.references.onclick{}
-assert(#panel.widgets.references.colors==3 and panel.widgets.references.colors[3].red==beforeOutside[3].red,
+local beforeOutside=bar_colors()
+panel.widgets.references.onmousedown(bar_event(1))
+panel.widgets.references.onmousemove{x=-20,y=10}
+panel.widgets.references.onmouseup{x=-20,y=10,button=MouseButton.LEFT}
+assert(#bar_colors()==3 and bar_colors()[3].red==beforeOutside[3].red,
   'Outside drop must restore reference count and order')
 panel.widgets.preview.onpaint{context=gc}
 panel.widgets.hue_wheel.onpaint{context=gc}
@@ -91,39 +109,44 @@ assert(panel.widgets.hue_wheel.visible)
 panel.data.show_map=false;panel.widgets.show_map.onclick()
 assert(not panel.widgets.hue_wheel.visible)
 for _=1,7 do panel.widgets.add_anchor.onclick() end
-assert(#panel.widgets.references.colors==8 and not panel.widgets.add_anchor.enabled)
+assert(#bar_colors()==8 and not panel.widgets.add_anchor.enabled)
 assert(panel.widgets.count.min==8 and panel.data.count==8)
 assert(panel.widgets.reference_color.label=='Anchor #8:','New anchor must select its own appended slot')
-local first=panel.widgets.references.colors[1]
+local first=bar_colors()[1]
 panel.data.reference_color=first
 panel.widgets.reference_color.onchange()
 assert(panel.widgets.reference_color.label=='Anchor #8:','Matching another RGB must not change selection')
 panel.data.reference_color=Color{r=0,g=0,b=0}
 panel.widgets.reference_color.onchange()
 assert(panel.widgets.reference_color.label=='Anchor #8:','Dark edit must stay in slot 8')
-assert(panel.widgets.references.colors[1].red==first.red)
-assert(panel.widgets.references.colors[8].red==0 and panel.widgets.references.colors[8].blue==0)
+assert(bar_colors()[1].red==first.red)
+assert(bar_colors()[8].red==0 and bar_colors()[8].blue==0)
+-- Equal RGB values still select by position and retain a visible highlight.
+panel.widgets.references.onmousedown(bar_event(7))
+panel.widgets.references.onmouseup(bar_event(7))
+assert(panel.widgets.reference_color.label=='Anchor #7:')
+local _,selectedOutlines=bar_colors()
+assert(selectedOutlines[1][1]==1+math.floor(6*356/8))
 panel.widgets.apply.onclick()
 assert(palette.size==18 and transactions==2 and refreshes==2)
 for _=1,6 do panel.widgets.remove_anchor.onclick() end
 assert(panel.widgets.count.min==2 and not panel.widgets.remove_anchor.enabled)
-local two=panel.widgets.references.colors
-panel.data.references={two[2],two[1]}
-panel.widgets.references.onclick{color=two[1]}
-assert(panel.widgets.references.colors[2].red==two[1].red)
+local two=bar_colors()
+move_reference(1,2)
+assert(bar_colors()[2].red==two[1].red)
 assert(panel.widgets.reference_color.label=='Anchor #2:')
-panel.data.references={two[2]}
-panel.widgets.references.onclick{}
-assert(#panel.widgets.references.colors==2,'Outside drop must not bypass two-anchor minimum')
+panel.widgets.references.onmousedown(bar_event(2))
+panel.widgets.references.onmouseup{x=400,y=10,button=MouseButton.LEFT}
+assert(#bar_colors()==2,'Outside drop must not bypass two-anchor minimum')
 panel.widgets.remove_anchor.onclick() -- guard even when the UI button is disabled
 panel.data.count=2;panel.widgets.count.onchange()
-panel.widgets.references.onclick{color=panel.widgets.references.colors[1]}
+move_reference(1,1)
 assert(panel.widgets.reference_color.label=='Anchor #1:')
-local second=panel.widgets.references.colors[2]
+local second=bar_colors()[2]
 for _,c in ipairs({Color{r=255,g=255,b=255},Color{r=0,g=0,b=0},Color{r=0,g=0,b=139}}) do
   panel.data.reference_color=c
   panel.widgets.reference_color.onchange()
-  local colors=panel.widgets.references.colors
+  local colors=bar_colors()
   assert(colors[1].red==c.red and colors[1].green==c.green and colors[1].blue==c.blue)
   assert(colors[2].red==second.red and colors[2].green==second.green and colors[2].blue==second.blue)
   assert(panel.widgets.reference_color.label=='Anchor #1:','Editing must preserve selected slot')
@@ -140,4 +163,4 @@ app.isUIAvailable=false
 commands[1].onclick()
 assert(panel==nil,'Headless mode must not open a panel')
 os.execute,io.popen,io.open,os.remove=originalExecute,originalPopen,originalOpen,originalRemove
-print('OK: startup, both modes, native drag reorder/outside restore, stable edits, Target and palette append; no tools/timers/files')
+print('OK: startup, persistent Anchor highlight, duplicate selection, drag reorder/cancel, stable edits and palette append')
