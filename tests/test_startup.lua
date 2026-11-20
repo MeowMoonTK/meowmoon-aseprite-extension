@@ -20,9 +20,11 @@ MouseButton={LEFT=1,RIGHT=2}
 Image=function(w,h) return {width=w,height=h,drawPixel=function() end} end
 Rectangle=function(...) return {...} end
 local gc=setmetatable({width=360,height=201},{__index=function() return function() end end})
-local function bar_colors()
+local barTestWidth=360
+local function bar_colors(width)
+  barTestWidth=width or barTestWidth
   local colors, outlines = {}, {}
-  local barGC=setmetatable({width=360,height=30},{__index=function() return function() end end})
+  local barGC=setmetatable({width=barTestWidth,height=34},{__index=function() return function() end end})
   function barGC:fillRect() colors[#colors+1]=self.color end
   function barGC:strokeRect(rect) outlines[#outlines+1]=rect end
   panel.widgets.references.onpaint{context=barGC}
@@ -30,7 +32,7 @@ local function bar_colors()
 end
 local function bar_event(index)
   local colors=bar_colors()
-  return {x=2+(index-.5)*356/#colors,y=10,button=MouseButton.LEFT}
+  return {x=2+(index-.5)*(barTestWidth-4)/#colors,y=10,button=MouseButton.LEFT}
 end
 local function move_reference(from,to)
   panel.widgets.references.onmousedown(bar_event(from))
@@ -158,9 +160,53 @@ assert(panel.widgets.center.visible and panel.widgets.step_mode.visible)
 assert(not panel.widgets.references.visible and panel.data.count==3)
 panel.widgets.apply.onclick()
 assert(palette.size==23 and transactions==4)
+-- Review regressions: exercise every move for 2..8 anchors at three widths.
+panel.data.mode='Multi-Anchor';panel.widgets.mode.onchange()
+local moves=0
+for m=2,8 do
+  while #bar_colors()<m do panel.widgets.add_anchor.onclick() end
+  for _,width in ipairs({160,361,540}) do
+    bar_colors(width)
+    for from=1,m do
+      for to=1,m do
+        local before=bar_colors()
+        local expected={};for i,c in ipairs(before) do expected[i]=c end
+        table.insert(expected,to,table.remove(expected,from))
+        local target=panel.data.count
+        move_reference(from,to)
+        local after,outline=bar_colors()
+        assert(#after==m and panel.data.count==target)
+        for i,c in ipairs(after) do
+          assert(c.red==expected[i].red and c.green==expected[i].green and c.blue==expected[i].blue)
+        end
+        assert(outline[1][1]==1+math.floor((to-1)*(width-4)/m),'Highlight must match drop slot at any width')
+        move_reference(to,from)
+        moves=moves+1
+      end
+    end
+  end
+end
+bar_colors(360)
+local beforeMixed=bar_colors()
+panel.widgets.references.onmousedown(bar_event(1))
+panel.widgets.references.onmousemove(bar_event(8))
+panel.widgets.references.onmouseup{x=355,y=10,button=MouseButton.RIGHT}
+panel.widgets.references.onmousemove(bar_event(4))
+local afterMixed=bar_colors()
+assert(afterMixed[1].red==beforeMixed[1].red and afterMixed[8].red==beforeMixed[8].red,
+  'Secondary release must cancel, not leave a stale drag preview')
+assert(panel.widgets.reference_color.label=='Anchor #1:')
+-- Mode switching mid-drag cancels it; a later release cannot reorder inputs.
+panel.widgets.references.onmousedown(bar_event(1))
+panel.widgets.references.onmousemove(bar_event(8))
+panel.data.mode='Single Color';panel.widgets.mode.onchange()
+panel.data.mode='Multi-Anchor';panel.widgets.mode.onchange()
+panel.widgets.references.onmouseup(bar_event(8))
+assert(bar_colors()[1].red==beforeMixed[1].red)
+assert(moves==609)
 panel=nil
 app.isUIAvailable=false
 commands[1].onclick()
 assert(panel==nil,'Headless mode must not open a panel')
 os.execute,io.popen,io.open,os.remove=originalExecute,originalPopen,originalOpen,originalRemove
-print('OK: startup, persistent Anchor highlight, duplicate selection, drag reorder/cancel, stable edits and palette append')
+print('OK: startup, highlight, duplicate/stable edits, palette, 609 drag/width cases and mixed-button/mode cancellation')
