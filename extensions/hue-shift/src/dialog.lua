@@ -125,12 +125,15 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
       text = "Check Updates",
       onclick = function()
         dlg:modify{ id = "update_status", text = "Checking releases..." }
-        local ok, message = updater.checkNow()
-        dlg:modify{ id = "update_status", text = ok and "Check finished" or "Update failed" }
-        app.alert{
-          title = ok and "Hue Shift Update Check" or "Hue Shift Update Error",
-          text = message .. "\nLog: " .. updater.logPath
-        }
+        local ok, message = updater.checkNow(function(kind, status)
+          pcall(function()
+            dlg:modify{ id = "update_status", text = status }
+          end)
+        end)
+        if not ok then
+          dlg:modify{ id = "update_status", text = message }
+          app.alert{ title = "Hue Shift Updates", text = message }
+        end
       end
     }
   end

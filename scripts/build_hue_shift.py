@@ -18,7 +18,7 @@ paths = [
     "src/palette.lua",
     "src/wheel.lua",
     "src/dialog.lua",
-    "src/autoupdate.ps1",
+    "src/check-release.ps1",
     "src/update.lua",
 ]
 with ZipFile(out, "w", compression=ZIP_DEFLATED) as archive:

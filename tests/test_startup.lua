@@ -1,96 +1,155 @@
--- Simulate the Aseprite GUI, including deferred startup Timer.
-local oldExecute=os.execute
-local oldOpen=io.open
-local calls={}
-os.execute=function(command)
-  calls[#calls+1]=command
-  return true,"exit",0
+-- Simulate Aseprite's Windows UI and its native extension installer.
+local originalExecute = os.execute
+local originalOpen = io.open
+local originalTime = os.time
+local commands, timers, shells = {}, {}, {}
+local mockResponse = nil
+local failRead = false
+local alerts, installations = {}, {}
+
+os.time = function() return 1740000000 end
+os.execute = function(command)
+  shells[#shells+1] = command
+  return true, "exit", 0
 end
-local tick
-Timer=function(spec)
-  assert(spec.interval==1.0)
-  local timer={}
-  function timer:start() tick=spec.ontick end
-  function timer:stop() end
+io.open = function(path, mode)
+  if failRead then error("Aseprite denied read permission") end
+  if not mockResponse then return nil end
+  local file = {}
+  function file:read() return mockResponse end
+  function file:close() end
+  return file
+end
+Timer = function(spec)
+  local timer = {interval=spec.interval, callback=spec.ontick, active=false}
+  function timer:start() self.active=true end
+  function timer:stop() self.active=false end
+  timers[#timers+1]=timer
   return timer
 end
-app={
+json = {
+  decode = function(data)
+    if data == "update" then
+      return {status="update",version="0.1.8",
+        packagePath="C:/Temp Folder/hue-shift-verified.aseprite-extension"}
+    elseif data == "up_to_date" then
+      return {status="up_to_date",message="Already current"}
+    elseif data == "error" then
+      return {status="error",message="GitHub returned 403"}
+    end
+    error("invalid JSON")
+  end
+}
+app = {
   isUIAvailable=true,
   os={windows=true},
-  fs={joinPath=function(...)return table.concat({...},"/")end},
-  alert=function()end
+  fs={
+    tempPath="C:/Temp Folder",
+    joinPath=function(...) return table.concat({...},"/") end,
+    isFile=function(p)
+      return p == "C:/Temp Folder/hue-shift-verified.aseprite-extension"
+    end
+  },
+  command={
+    Options=function(args)
+      installations[#installations+1] = args.installExtension
+      return true
+    end
+  },
+  alert=function(args) alerts[#alerts+1]=args end
 }
-local commands={}
-local plugin={
-  path="extensions/hue-shift",version="0.1.7",
-  newCommand=function(_,spec)commands[spec.id]=spec end
+local plugin = {
+  path="extensions/hue-shift",
+  version="0.1.7",
+  newCommand=function(_, spec)
+    commands[spec.id]=spec
+  end
 }
 dofile("extensions/hue-shift/main.lua")
 init(plugin)
-assert(#calls==0,"Startup check should wait for Aseprite UI")
-assert(type(tick)=="function")
-tick()
-assert(#calls==1)
-assert(calls[1]:find('cmd.exe /d /c start',1,true))
-assert(calls[1]:find('autoupdate.ps1" -InstallDir "extensions/hue-shift"',1,true))
+assert(commands.MeowMoonGenerateHueShiftRamp)
 assert(commands.MeowMoonCheckHueShiftUpdates)
-app.os.windows=false
-init(plugin)
-assert(#calls==1,"Do not run Windows updater on other platforms")
-app.os.windows=true
-app.isUIAvailable=false
-init(plugin)
-assert(#calls==1,"Do not run updater in headless mode")
-os.execute=oldExecute
+assert(#shells==0,"Startup network check must wait for the UI timer.")
+assert(#timers==1 and timers[1].interval==1.0)
+timers[1].callback()
+assert(#shells==1 and #timers==2)
+assert(shells[1]:find("cmd.exe /d /c start",1,true))
+assert(shells[1]:find('check-release.ps1" -CurrentVersion "0.1.7"',1,true))
+assert(shells[1]:find(' -ResultFile "C:/Temp Folder/',1,true))
+assert(not shells[1]:find("autoupdate.ps1",1,true))
+assert(#installations==0,"Never install before download verification.")
+assert(timers[2].interval==0.5)
+timers[2].callback()  -- No status result yet.
+assert(#installations==0 and timers[2].active)
+mockResponse="update"
+timers[2].callback()
+assert(not timers[2].active)
+assert(#installations==1 and installations[1]:find("%.aseprite%-extension$"))
+assert(#alerts==0,"Native Aseprite installer owns confirmation dialogs.")
 
--- Manual check must report a nonzero PowerShell exit code.
-io.open=function()return nil end
-local updater=dofile("extensions/hue-shift/src/update.lua")("extensions/hue-shift")
-local manualCommand
-os.execute=function(cmd)
-  manualCommand=cmd
-  return nil,"exit",5
-end
-local ok,message=updater.checkNow()
-assert(not ok and message:find("failed",1,true))
-assert(manualCommand:find("powershell.exe",1,true))
-assert(not manualCommand:find("cmd.exe /d /c start",1,true))
-os.execute=oldExecute
-io.open=oldOpen
+-- Manual check should still run asynchronously and show up-to-date state.
+mockResponse=nil
+commands.MeowMoonCheckHueShiftUpdates.onclick()
+assert(#shells==2 and #timers==3 and timers[3].active)
+mockResponse="up_to_date"
+timers[3].callback()
+assert(#installations==1)
+assert(#alerts==1 and alerts[1].text=="Already current")
 
--- The extension still shows its installed version and a manual update control.
-app.isUIAvailable=true
-app.os.windows=true
+-- A failed GitHub response must never call the native installer.
+mockResponse=nil
+commands.MeowMoonCheckHueShiftUpdates.onclick()
+mockResponse="error"
+timers[4].callback()
+assert(#installations==1)
+assert(#alerts==2 and alerts[2].text:find("403",1,true))
+
+-- Permission denial in io.open is a visible error; no install occurs.
+mockResponse=nil
+commands.MeowMoonCheckHueShiftUpdates.onclick()
+failRead=true
+timers[5].callback()
+failRead=false
+assert(#installations==1 and #alerts==3)
+assert(alerts[3].text:find("denied",1,true))
+
+-- The original RGB palette dialog is still available and shows version.
 app.fgColor={red=100,green=120,blue=140}
-app.pixelColor={rgba=function()return 0 end}
-Color=function(c)return c end
+app.pixelColor={rgba=function() return 0 end}
+Color=function(c) return c end
 ColorMode={RGB=0}
-Image=function(w,h)return{width=w,height=h,drawPixel=function()end}end
-local versionShown,checkButton,updateText
+Image=function(w,h) return {width=w,height=h,drawPixel=function() end} end
+local shownVersion, button, updateText
 Dialog=function()
   local dlg={data={}}
   function dlg:label(spec)
-    if spec.label=="Version:" then versionShown=spec.text end
+    if spec.label=="Version:" then shownVersion=spec.text end
     if spec.id=="update_status" then updateText=spec.text end
     return self
   end
   function dlg:button(spec)
-    if spec.id=="update" then checkButton=spec.onclick end
+    if spec.id=="update" then button=spec.onclick end
     return self
   end
-  return setmetatable(dlg,{__index=function()
-    return function(self)return self end
-  end})
+  return setmetatable(dlg,{
+    __index=function() return function(self) return self end end
+  })
 end
-local oldStart=os.execute
-local count=0
-os.execute=function(cmd)count=count+1;return true,"exit",0 end
-init(plugin)
 commands.MeowMoonGenerateHueShiftRamp.onclick()
-assert(versionShown=="v0.1.7")
-assert(type(checkButton)=="function" and type(updateText)=="string")
-assert(count==0,"Timer should not trigger until tick")
-tick()
-assert(count==1)
-os.execute=oldStart
-print("OK: delayed startup, manual exit-code diagnostics and version panel")
+assert(shownVersion=="v0.1.7")
+assert(type(button)=="function" and type(updateText)=="string")
+
+-- The extension never runs a Windows updater in headless or non-Windows mode.
+local beforeShells=#shells
+app.os.windows=false
+init(plugin)
+assert(#shells==beforeShells)
+app.os.windows=true
+app.isUIAvailable=false
+init(plugin)
+assert(#shells==beforeShells)
+exit(plugin)
+os.execute=originalExecute
+io.open=originalOpen
+os.time=originalTime
+print("OK: native updater startup, verified-install handoff, errors and UI")
