@@ -10,7 +10,7 @@ Public repository containing independent Aseprite extensions.
 
 Generates color ramps with six hue-shift styles, an HSV Color Map preview, and an Add to Palette action.
 
-**Windows auto-update:** The installed extension checks public GitHub Releases during Aseprite startup. It uses Windows PowerShell and HTTPS without authentication, GitHub CLI, Scheduled Tasks, or external updater installations. New versions become active the next time Aseprite opens.
+**Windows updates:** Click **Check Updates** in the extension panel. It checks public GitHub Releases, downloads and verifies newer packages, then opens Aseprite's native upgrade confirmation. Restart after accepting. No checks run on startup. No GitHub CLI, authentication, scheduled tasks or external updater extension is needed.
 
 **Build policy:** GitHub Actions runs tests only. Package builds and GitHub Releases are made **only on explicit request**.
 

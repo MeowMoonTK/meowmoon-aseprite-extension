@@ -2,6 +2,14 @@
 local originalExecute = os.execute
 local originalOpen = io.open
 local originalTime = os.time
+local originalRemove = os.remove
+local resultPath, inInstaller
+local removed = {}
+os.remove = function(path)
+  assert(not inInstaller, "Do not delete files while the native installer is using them")
+  removed[path] = true
+  return true
+end
 local commands, timers, shells = {}, {}, {}
 local mockResponse = nil
 local failRead = false
@@ -10,11 +18,13 @@ local alerts, installations = {}, {}
 os.time = function() return 1740000000 end
 os.execute = function(command)
   shells[#shells+1] = command
+  resultPath = command:match('-ResultFile "(.-)"')
   return true, "exit", 0
 end
 io.open = function(path, mode)
   if failRead then error("Aseprite denied read permission") end
-  if not mockResponse then return nil end
+  if mode == "w" then return {write=function() return true end,close=function() return true end} end
+  if not mockResponse then return nil, "No such file", 2 end
   local file = {}
   function file:read() return mockResponse end
   function file:close() end
@@ -31,7 +41,7 @@ json = {
   decode = function(data)
     if data == "update" then
       return {status="update",version="0.1.8",
-        packagePath="C:/Temp Folder/hue-shift-verified.aseprite-extension"}
+        packagePath=resultPath .. ".aseprite-extension"}
     elseif data == "up_to_date" then
       return {status="up_to_date",message="Already current"}
     elseif data == "error" then
@@ -47,11 +57,18 @@ app = {
     tempPath="C:/Temp Folder",
     joinPath=function(...) return table.concat({...},"/") end,
     isFile=function(p)
-      return p == "C:/Temp Folder/hue-shift-verified.aseprite-extension"
+      return p == resultPath .. ".aseprite-extension"
     end
   },
   command={
     Options=function(args)
+      inInstaller = true
+      assert(not removed[args.installExtension])
+      -- A manual check from a nested dialog cannot launch another worker.
+      local count = #shells
+      commands.MeowMoonCheckHueShiftUpdates.onclick()
+      assert(#shells == count)
+      inInstaller = false
       installations[#installations+1] = args.installExtension
       return true
     end
@@ -69,30 +86,31 @@ dofile("extensions/hue-shift/main.lua")
 init(plugin)
 assert(commands.MeowMoonGenerateHueShiftRamp)
 assert(commands.MeowMoonCheckHueShiftUpdates)
-assert(#shells==0,"Startup network check must wait for the UI timer.")
-assert(#timers==1 and timers[1].interval==1.0)
-timers[1].callback()
-assert(#shells==1 and #timers==2)
+assert(#shells==0 and #timers==0,"Startup must never create a network check or update timer.")
+commands.MeowMoonCheckHueShiftUpdates.onclick()
+assert(#shells==1 and #timers==1)
 assert(shells[1]:find("cmd.exe /d /c start",1,true))
 assert(shells[1]:find('check-release.ps1" -CurrentVersion "0.1.7"',1,true))
 assert(shells[1]:find(' -ResultFile "C:/Temp Folder/',1,true))
 assert(not shells[1]:find("autoupdate.ps1",1,true))
 assert(#installations==0,"Never install before download verification.")
-assert(timers[2].interval==0.5)
-timers[2].callback()  -- No status result yet.
-assert(#installations==0 and timers[2].active)
+assert(timers[1].interval==0.5)
+timers[1].callback()  -- No status result yet.
+assert(#installations==0 and timers[1].active)
 mockResponse="update"
-timers[2].callback()
-assert(not timers[2].active)
+timers[1].callback()
+assert(not timers[1].active)
 assert(#installations==1 and installations[1]:find("%.aseprite%-extension$"))
-assert(#alerts==0,"Native Aseprite installer owns confirmation dialogs.")
+assert(removed[resultPath] and removed[resultPath .. ".aseprite-extension"])
+assert(#alerts==1,"Only the nested busy check displays an informational alert.")
+alerts = {}
 
 -- Manual check should still run asynchronously and show up-to-date state.
 mockResponse=nil
 commands.MeowMoonCheckHueShiftUpdates.onclick()
-assert(#shells==2 and #timers==3 and timers[3].active)
+assert(#shells==2 and #timers==2 and timers[2].active)
 mockResponse="up_to_date"
-timers[3].callback()
+timers[2].callback()
 assert(#installations==1)
 assert(#alerts==1 and alerts[1].text=="Already current")
 
@@ -100,7 +118,7 @@ assert(#alerts==1 and alerts[1].text=="Already current")
 mockResponse=nil
 commands.MeowMoonCheckHueShiftUpdates.onclick()
 mockResponse="error"
-timers[4].callback()
+timers[3].callback()
 assert(#installations==1)
 assert(#alerts==2 and alerts[2].text:find("403",1,true))
 
@@ -108,7 +126,7 @@ assert(#alerts==2 and alerts[2].text:find("403",1,true))
 mockResponse=nil
 commands.MeowMoonCheckHueShiftUpdates.onclick()
 failRead=true
-timers[5].callback()
+timers[4].callback()
 failRead=false
 assert(#installations==1 and #alerts==3)
 assert(alerts[3].text:find("denied",1,true))
@@ -119,7 +137,7 @@ app.pixelColor={rgba=function() return 0 end}
 Color=function(c) return c end
 ColorMode={RGB=0}
 Image=function(w,h) return {width=w,height=h,drawPixel=function() end} end
-local shownVersion, button, updateText
+local shownVersion, button, updateText, updateEnabled
 Dialog=function()
   local dlg={data={}}
   function dlg:label(spec)
@@ -128,7 +146,12 @@ Dialog=function()
     return self
   end
   function dlg:button(spec)
-    if spec.id=="update" then button=spec.onclick end
+    if spec.id=="update" then button=spec.onclick;updateEnabled=spec.enabled end
+    return self
+  end
+  function dlg:modify(spec)
+    if spec.id=="update" then updateEnabled=spec.enabled end
+    if spec.id=="update_status" then updateText=spec.text end
     return self
   end
   return setmetatable(dlg,{
@@ -138,6 +161,13 @@ end
 commands.MeowMoonGenerateHueShiftRamp.onclick()
 assert(shownVersion=="v0.1.7")
 assert(type(button)=="function" and type(updateText)=="string")
+local beforeButton=#shells
+mockResponse=nil
+button()
+assert(#shells==beforeButton+1 and updateEnabled==false,"Panel button starts exactly one check and disables itself")
+mockResponse="up_to_date"
+timers[#timers].callback()
+assert(updateEnabled==true and updateText=="Already current","Panel shows result and permits another check")
 
 -- The extension never runs a Windows updater in headless or non-Windows mode.
 local beforeShells=#shells
@@ -152,4 +182,5 @@ exit(plugin)
 os.execute=originalExecute
 io.open=originalOpen
 os.time=originalTime
-print("OK: native updater startup, verified-install handoff, errors and UI")
+os.remove=originalRemove
+print("OK: manual updater, quiet startup, verified-install handoff, errors and UI")

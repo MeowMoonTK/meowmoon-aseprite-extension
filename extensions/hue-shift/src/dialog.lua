@@ -123,14 +123,18 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
     dlg:button{
       id = "update",
       text = "Check Updates",
+      enabled = not updater.busy,
       onclick = function()
+        dlg:modify{ id = "update", enabled = false }
         dlg:modify{ id = "update_status", text = "Checking releases..." }
         local ok, message = updater.checkNow(function(kind, status)
           pcall(function()
             dlg:modify{ id = "update_status", text = status }
+            dlg:modify{ id = "update", enabled = kind ~= "verified" and kind ~= "checking" }
           end)
         end)
         if not ok then
+          dlg:modify{ id = "update", enabled = not updater.busy }
           dlg:modify{ id = "update_status", text = message }
           app.alert{ title = "Hue Shift Updates", text = message }
         end
@@ -147,7 +151,7 @@ function M.open(ramp, paletteWriter, wheel, version, updater)
     end
   }
   dlg:button{ text = "Close" }
-  dlg:show{ wait = false }
+  dlg:show{ wait = false, autoscrollbars = true }
 end
 
 return M
