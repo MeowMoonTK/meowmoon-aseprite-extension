@@ -18,30 +18,33 @@ Brightness is measured as the source color's **grayscale-equivalent sRGB value**
 
 Step Mode now controls the **grayscale value of each final RGB color** (0–255 Rec.709 luminance encoded as sRGB), rather than dividing OKLab L. Each color's Hue and intended Chroma still follow the original Shift Style. The generator searches for an OKLab L that produces the target gray after sRGB gamut mapping, reducing Chroma when necessary. The original RGB stays untouched at the anchor. Balanced prioritizes uniform grayscale increments over reaching the darkest and lightest possible endpoints; at 8-bit precision individual steps may differ by a fraction of a gray level.
 
-## Auto-update reliability and diagnostics (v0.1.7)
+## Native Aseprite update workflow (Windows, v0.1.7 source)
 
-The automatic Windows updater now launches one second after the Aseprite GUI event loop starts, not during extension initialization. This allows Aseprite to display its security permission prompt normally.
+Hue Shift checks for stable GitHub Releases one second after Aseprite's UI initializes. Checking does not block the color editor. When a newer Release is available:
 
-To check manually, use **Hue Shift > Check Updates** in the ramp panel or **File > Scripts > Hue Shift: Check Updates**. This runs PowerShell synchronously, reports the real result, and shows the log location.
+1. A small PowerShell helper fetches the Release archive and its SHA-256 file over HTTPS.
+2. It validates the SHA-256, ZIP entries and extension identity/version, then writes a JSON status result to the Windows temporary directory.
+3. Lua receives that result and calls Aseprite's native installer:
+   \`app.command.Options{ installExtension = verifiedPackagePath }\`
+4. **Aseprite asks you to confirm the upgrade**. Restart Aseprite to activate the new version.
 
-To enable unattended startup checks, accept Aseprite's execute permission prompt for the script. For persistent permission, choose **Give full trust to this script** and **Give Script Full Access**. If the permission is rejected, the color ramp continues to work but automatic updates cannot launch.
+**PowerShell no longer removes, renames, uninstalls or replaces extension folders.** Only Aseprite's native installer changes the installation. A successful download does not prove the user confirmed installation.
 
-A successful background command launch does **not** prove an update was installed; confirm the installed version after restarting Aseprite, or look for the installation message in the update log. Log location: `%LOCALAPPDATA%\MeowMoon\HueShift\update.log`.
+You can check manually using the **Check Updates** button in Hue Shift or **File > Scripts > Hue Shift: Check Updates**. This command also checks asynchronously and displays the result when finished. Already up-to-date installations stay quiet on startup.
 
-**Migration:** Aseprite installations running v0.1.5/v0.1.6 do not contain this new diagnostic UI. The source changes are in v0.1.7 only; the release is not yet built. If auto-update from those versions never launches, they cannot bootstrap a later repair without a manual check or installation.
+### Permissions and diagnostics
 
-## Update check at Aseprite startup (Windows)
+On first use, Aseprite might ask for permission to execute PowerShell and read the temporary result file. **Give full trust to this script** / **Give Script Full Access** allows subsequent startup checks. Hue Shift's palette generator is usable even when these permissions are declined. Failed checks display diagnostics when invoked manually.
 
-1. Install a package containing this new updater (v0.1.5) once through **Edit > Preferences > Extensions > Add Extension**.
-2. On every Windows Aseprite startup, Hue Shift checks the public Releases of [MeowMoonTK/meowmoon-aseprite-extension](https://github.com/MeowMoonTK/meowmoon-aseprite-extension) over HTTPS.
-3. If a newer stable `hue-shift-vX.Y.Z` tag is published, it downloads the matching `.aseprite-extension` and `.sha256` files, verifies the checksum and extension manifest, and installs the package.
-4. Restart Aseprite to activate the new version. Aseprite keeps using the already-loaded version during the current session.
+Detailed log: \`%LOCALAPPDATA%\MeowMoon\HueShift\update.log\`. No GitHub CLI, authentication, separate extension or scheduled task is needed. The feature currently supports Windows; background checks do not run on other operating systems.
 
-**No GitHub CLI, token, login, Task Scheduler, Windows Startup task, or launcher.** PowerShell 5.1 is included in Windows.
+### Migrating from older versions
 
-Aseprite may ask permission to use `os.execute` on the first run. Internet or GitHub errors never interrupt ramp generation; see the diagnostic section above.
+Releases v0.1.5 and v0.1.6 contain the previous self-updater. If that updater cannot run on your computer, it **cannot bootstrap this replacement**. Install the first Release containing the native installer manually once using Aseprite Preferences > Extensions > Add Extension. After that, subsequent Releases can be proposed through Aseprite's installer.
 
-**Migration:** Versions 0.1.3 and 0.1.4 were published with a GitHub CLI-dependent updater. If `gh` is unavailable, they cannot automatically bootstrap the new HTTPS updater. Install [v0.1.5](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.5) manually once; subsequent releases will be checked automatically.
+### Design references
+
+This implementation follows the native-install approach demonstrated by [Aseprite Extension Updater](https://github.com/JRiggles/Aseprite-Extension-Updater) (John Riggles, MIT). It does not copy that project's unmaintained networking logic or require its separate extension. [Aseprite's app.command API](https://aseprite.org/api/app_command) and [Timer API](https://aseprite.org/api/timer) are the platform sources. Installation remains user-confirmed rather than silent.
 
 ## Build / release policy
 
