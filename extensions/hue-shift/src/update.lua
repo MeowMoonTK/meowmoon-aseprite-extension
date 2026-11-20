@@ -58,7 +58,8 @@ return function(root, installedVersion)
       pcall(function() file:close() end)
       local parsed, result = false, nil
       if read and contents then parsed,result=pcall(json.decode,contents) end
-      if not parsed or type(result) ~= "table" then
+      -- Aseprite returns a JSON object userdata; standalone tests may use tables.
+      if not parsed or (type(result) ~= "table" and type(result) ~= "userdata") then
         finish("error","Invalid update result.")
         return
       end

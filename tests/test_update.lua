@@ -1,3 +1,4 @@
+local nativeJSON = json -- Preserve Aseprite's real decoder when run with --batch --script.
 -- Fault injection around real orchestration; no network or installation.
 local factory = dofile('extensions/hue-shift/src/update.lua')
 local function scenario(options)
@@ -43,6 +44,7 @@ local function scenario(options)
   end
   json = {decode=function(data)
     if data == 'bad' then error('invalid JSON') end
+    if nativeJSON then return nativeJSON.decode(nativeJSON.encode(data)) end
     return data
   end}
   app = {isUIAvailable=true, os={windows=true},

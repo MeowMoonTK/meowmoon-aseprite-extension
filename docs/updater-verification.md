@@ -23,7 +23,9 @@ On Windows with Aseprite 1.3.18.6:
 - Replaced the first test build with the final v0.1.7 package through native confirmation; opened the installed panel with version v0.1.7.
 - Enabled Aseprite's built-in dialog scrollbars after observing bottom controls clipped in a short window. The actual Check Updates button is reachable and starts a check, disabling itself.
 - Compared all nine package entries against both source and native-installed files: exact matches.
-- The first button check is currently waiting for the user to handle Aseprite's file-write security prompt. Do not claim a completed live network check until it finishes.
+- The user granted Aseprite's initial script permission. The first live check exposed that Aseprite JSON objects are `userdata`, whereas the mocks returned tables. Fixed object acceptance and ran tests/test_update.lua with Aseprite's real JSON encoder/decoder via `--batch --script`; all scenarios pass.
+- Built/reinstalled the corrected v0.1.7 package through native confirmation. Clicking the real panel button reached public GitHub Releases and displayed `Installed v0.1.7 is current.` After dismissing the alert, the button is enabled and no `meowmoon-update-*` files remain in Aseprite's actual Windows temp folder.
+- Final source/package/native-installed entries match exactly after the JSON fix.
 
 The public Release is 0.1.6, older than installed source 0.1.7. A real public check should report up to date; a newer-version automatic handoff cannot be claimed from that response. Download/verification and installer handoff have automated coverage; full newer-version upgrade/cancel and plugin-preference retention remain separate integration cases.
 
