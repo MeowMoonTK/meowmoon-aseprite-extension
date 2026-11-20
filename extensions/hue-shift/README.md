@@ -1,8 +1,8 @@
-# MeowMoon Hue Shift v0.1.8 (development)
+# MeowMoon Hue Shift v0.1.9
 
 Generate 3–16 colors with the chosen Center Color, six Hue Shift styles, independent Step Modes, Hue Strength, and HSV Color Map. **Add to Palette** appends without an arbitrary 256-slot limit. The panel shows the installed extension version.
 
-## Multi-Anchor (unreleased)
+## Multi-Anchor
 
 Select **Mode > Multi-Anchor** to generate a ramp from **2–8 color references**. References sort automatically from dark to light. Click a reference swatch to select it, then use its color button to edit it. **Add Anchor** uses the current foreground color; **Remove Anchor** removes the selected reference, down to a minimum of two.
 
