@@ -1,135 +1,104 @@
-local nativeJSON = json -- Preserve Aseprite's real decoder when run with --batch --script.
--- Fault injection around real orchestration; no network or installation.
-local factory = dofile('extensions/hue-shift/src/update.lua')
+-- Sequential updater: fake only the external tool boundary, use native JSON/Version when available.
+local nativeJSON,nativeVersion=json,Version
+local originalPopen,originalRemove,originalExecute=io.popen,os.remove,os.execute
+local realApp=app
+local factory=dofile('extensions/hue-shift/src/update.lua')
+if realApp and realApp.params.live=='1' then
+  app={isUIAvailable=true,os=realApp.os,fs=realApp.fs,command={Options=function() error('No install expected') end}}
+  local u=factory(nil,'999.0.0')
+  local ok,message=u.checkNow()
+  assert(ok and u.state=='up_to_date',message)
+  print('OK: real curl + native JSON/Version, no-update result, no temporary files')
+  return
+end
+if not Version then
+  Version=function(text)
+    local a,b,c=text:match('^(%d+)%.(%d+)%.(%d+)$')
+    assert(a,'Invalid version')
+    return setmetatable({n=tonumber(a)*1000000+tonumber(b)*1000+tonumber(c)},
+      {__lt=function(x,y) return x.n<y.n end,__le=function(x,y) return x.n<=y.n end})
+  end
+end
 local function scenario(options)
-  options = options or {}
-  local files, timers, shells, events = {}, {}, 0, {}
-  local now, path, updater = 1000
-  os.time = function() return now end
-  os.remove = function(p)
-    if options.reenterCleanup and updater then updater.stop() end
-    if options.removeDenied then error('remove denied') end
-    files[p] = nil
-    return true
-  end
-  io.open = function(p, mode)
-    if options.openThrows then error('access denied') end
-    if options.openDenied then return nil, 'Permission denied', 13 end
-    if mode == 'w' then
-      path = p
-      files[p] = {status='checking'}
-      return {write=function() return true end,close=function() return true end}
-    end
-    if not files[p] then return nil, 'No such file', 2 end
-    return {read=function()
-      if options.reenterRead then
-        assert(not timers[#timers].active,'Pause polling before gated file reads')
-        timers[#timers].ontick() -- a queued tick from a nested security dialog
-      end
-      if options.readThrows then error('read failed') end
-      return files[p]
-    end, close=function() return true end}
-  end
-  os.execute = function()
-    shells = shells + 1
-    assert(not timers[#timers].active,"Do not poll while execute permission is unresolved")
-    if options.shellThrows then error('execute denied') end
-    if options.shellFails then return nil, 'exit', 1 end
-    return true, 'exit', 0
-  end
-  Timer = function(spec)
-    if options.timerThrows then error('Timer unavailable') end
-    local timer = {ontick=spec.ontick, active=false}
-    function timer:start()
-      if options.timerStartThrows then error('Timer start failed') end
-      self.active = true
-    end
-    function timer:stop() self.active=false end
-    timers[#timers+1] = timer
-    return timer
-  end
-  json = {decode=function(data)
-    if data == 'bad' then error('invalid JSON') end
-    if nativeJSON then return nativeJSON.decode(nativeJSON.encode(data)) end
-    return data
+  options=options or {}
+  local files,commands,states={}, {}, {}
+  local u,path,installed= nil,nil,0
+  local hash=string.rep('a',64)
+  local releases={{tag_name='hue-shift-v9.0.0',prerelease=true},
+    {tag_name='other-v99.0.0'},{tag_name='hue-shift-v0.1.7'}, {tag_name='hue-shift-v0.1.9'}}
+  json={decode=function(data)
+    if options.badJson then error('invalid JSON') end
+    if nativeJSON then return nativeJSON.decode(nativeJSON.encode(releases)) end
+    return releases
   end}
-  app = {isUIAvailable=true, os={windows=true},
-    fs={tempPath='C:/Temp Folder', joinPath=function(...) return table.concat({...}, '/') end,
-      isFile=function(p) return files[p] ~= nil end}, alert=function() end,
-    command={Options=function(args)
-      assert(not timers[#timers].active,'Do not poll inside native/security dialogs')
-      timers[#timers].ontick()
-      assert(updater.busy and files[args.installExtension], 'Retain lock and package during installation')
-      assert(not updater.checkNow(), 'Nested manual checks must be rejected')
-      if options.stopDuringInstall then
-        updater.stop()
-        assert(files[args.installExtension], 'Plugin exit must retain active package')
+  Timer=function() error('Updater must not use a Timer') end
+  os.execute=function() error('Updater must not launch a detached helper') end
+  os.remove=function(p)
+    if options.cleanupDenied then error('deletion denied') end
+    files[p]=nil;return true
+  end
+  io.popen=function(command)
+    commands[#commands+1]=command
+    local stage=#commands
+    assert(not command:find('powershell',1,true) and not command:find('.json',1,true))
+    if command:find('curl.exe',1,true) then
+      assert(command:find('--connect-timeout 5',1,true) and command:find('--max-time',1,true))
+    end
+    assert(not u.checkNow(),'Nested permission/native calls cannot start another request')
+    if options.popenThrows then error('execute denied') end
+    if options.popenDenied then return nil,'permission denied' end
+    if command:find('--output',1,true) then
+      path=command:match('%-%-output "(.-)"');files[path]=true
+    end
+    local pipe={}
+    function pipe:read()
+      if options.readThrows then error('read failed') end
+      if options.stopDuringRead then u.stop() end
+      if stage==1 then return 'release JSON' end
+      if stage==2 then return options.checksumMalformed and 'invalid' or hash..'  hue-shift-0.1.9.aseprite-extension\n' end
+      if stage==3 then return '' end
+      return 'SHA256 hash:\n'..(options.checksumMismatch and string.rep('b',64) or hash)..'\nDone'
+    end
+    function pipe:close()
+      if options.curlError and stage==1 or options.downloadError and stage==3 or options.hashError and stage==4 then
+        return nil,'exit',1
       end
-      if options.installThrows then error('native error') end
-      if options.installFalse then return false end
-      if options.installNil then return nil end
+      return true,'exit',0
+    end
+    return pipe
+  end
+  app={isUIAvailable=true,os={windows=true},fs={tempPath='C:/Temp Folder',
+    joinPath=function(...) return table.concat({...},'/') end,isFile=function(p) return files[p]~=nil end},
+    command={Options=function(args)
+      installed=installed+1
+      assert(u.busy and files[args.installExtension],'Retain package throughout native installer')
+      assert(not u.checkNow(),'Do not start another installer')
+      if options.stopDuringInstall then u.stop();assert(files[args.installExtension]) end
+      if options.installerThrows then error('native installer error') end
+      if options.installerFalse then return false end
       return true
     end}}
-  if options.noInstaller then app.command={} end
-  updater = factory('extension', '0.1.7')
-  local started = updater.checkNow(function(kind)
-    events[#events+1]=kind
-    assert(updater.busy, 'Callbacks must run before unlocking')
-    assert(not updater.checkNow(), 'Callback reentry must be rejected')
-  end)
-  local function deliver(result)
-    files[path]=result
-    files[path .. '.aseprite-extension']=true
-    timers[#timers].ontick()
-  end
-  return {u=updater, options=options, files=files, timers=timers, events=events,
-    started=started, path=path, deliver=deliver, shells=function() return shells end,
-    tick=function(seconds) now=now+seconds; timers[#timers].ontick() end}
+  u=factory(nil,options.current or '0.1.8')
+  u.onStatus=function(kind) states[#states+1]=kind end
+  local ok,message=u.checkNow()
+  assert(not u.busy,'Always release busy state')
+  if not options.cleanupDenied then assert(next(files)==nil,'Remove only downloaded package on every terminal path') end
+  return u,ok,message,commands,installed,states
 end
-for _, fault in ipairs({'shellThrows','shellFails','openThrows','openDenied','timerThrows','timerStartThrows'}) do
-  local s=scenario({[fault]=true})
-  assert(not s.started and not s.u.busy and s.u.state=='error', fault)
-  for _, t in ipairs(s.timers) do assert(not t.active) end
-  assert(next(s.files)==nil, fault .. ': clean request')
-  if fault=='timerThrows' or fault:find('open') then assert(s.shells()==0) end
+local u,ok,_,commands,installed=scenario()
+assert(ok and u.state=='installer_closed' and #commands==4 and installed==1)
+u,ok,_,commands,installed=scenario({current='1.0.0'})
+assert(ok and u.state=='up_to_date' and #commands==1 and installed==0)
+for _,fault in ipairs({'popenDenied','popenThrows','readThrows','curlError','badJson','checksumMalformed',
+  'checksumMismatch','downloadError','hashError','installerFalse','installerThrows','stopDuringRead'}) do
+  u,ok=scenario({[fault]=true})
+  assert(not ok and u.state=='error',fault)
 end
-for _, fault in ipairs({'openThrows','openDenied','readThrows','badJson','timeout'}) do
-  local s=scenario()
-  if fault=='timeout' then s.tick(141)
-  elseif fault=='badJson' then s.deliver('bad')
-  else
-    s.options[fault]=true
-    s.files[s.path]={status='up_to_date'}
-    s.tick(1)
-  end
-  assert(s.u.state=='error' and not s.u.busy, fault .. ': failed request must finish')
-  if fault=='timeout' then assert(s.u.launchStatus:find('timed out')) end
-  assert(not s.timers[1].active)
-  assert(next(s.files)==nil)
-end
-for _, fault in ipairs({'none','installThrows','installFalse','installNil','stopDuringInstall','noInstaller'}) do
-  local s=scenario({[fault]=true})
-  s.deliver({status='update',version='0.1.8',packagePath=s.path .. '.aseprite-extension'})
-  assert(not s.u.busy and next(s.files)==nil, fault)
-  local expected=(fault=='installThrows' or fault=='installFalse' or fault=='noInstaller') and 'error' or 'installer_closed'
-  assert(s.u.state==expected, fault)
-  assert(not s.u.launchStatus:find('success'))
-end
-for _, fault in ipairs({'reenterRead','reenterCleanup'}) do
-  local nested=scenario({[fault]=true})
-  nested.deliver({status='up_to_date',message='Already current'})
-  assert(nested.u.state=='up_to_date' and not nested.u.busy and next(nested.files)==nil,fault)
-end
-local s=scenario()
-s.deliver({status='update',version='0.1.8',packagePath='C:/unrelated.aseprite-extension'})
-assert(s.u.state=='error' and next(s.files)==nil)
-s=scenario()
-s.deliver({status='up_to_date',message='Already current'})
-assert(s.u.state=='up_to_date' and not s.u.busy and next(s.files)==nil)
-assert(s.u.checkNow(), 'Terminal completion permits another check')
-s.u.stop()
-assert(not s.timers[#s.timers].active and next(s.files)==nil and not s.u.checkNow())
-s=scenario({removeDenied=true})
-s.deliver({status='error',message='HTTP 403'})
-assert(s.u.launchStatus:find('Could not remove'))
-print('OK: updater locks, timeout, permissions, cleanup, native cancel/error and reentrant exit')
+u,ok=scenario({stopDuringInstall=true})
+assert(ok and u.state=='installer_closed')
+u,ok=scenario({cleanupDenied=true})
+assert(ok and u.launchStatus:find('Could not delete'))
+u.stop()
+assert(not u.checkNow())
+io.popen,os.remove,os.execute=originalPopen,originalRemove,originalExecute
+print('OK: sequential curl flow, stable versions, checksums, tool errors, permission denial, cleanup and native handoff')

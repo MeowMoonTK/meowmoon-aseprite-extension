@@ -29,15 +29,19 @@ Step Mode now controls the **grayscale value of each final RGB color** (0–255 
 Hue Shift does not check for updates when Aseprite starts or when the panel opens.
 
 1. Open **Updates...** near the version in the Hue Shift panel (or File > Scripts > Hue Shift: Updates), then click **Check Updates** in its separate window.
-2. One background PowerShell process checks stable public GitHub Releases. If newer, it downloads the package and SHA-256 file and verifies the checksum, ZIP entries and extension identity/version.
+2. Sequential curl requests check stable public GitHub Releases and download a newer package and its checksum. Windows certutil verifies SHA-256; Aseprite validates the archive and manifest during installation.
 3. Aseprite opens Preferences > Extensions and asks to replace the installed extension. Accept or cancel there.
 4. Close Preferences. If accepted, restart Aseprite and check the version shown in the Hue Shift panel.
 
 Only Aseprite's [native Options command](https://aseprite.org/api/command/Options) changes the installed extension. The updater never unpacks or replaces its installation directory. Returning from Options does not prove installation: the panel tells you to restart **if you accepted**.
 
-The button is disabled during a check/installer. Three HTTP requests use .NET HttpClient's 30-second full-response timeout; Lua stops polling after 120 seconds. Errors end the check and leave color generation available. The package is retained until the native command returns, including plugin unload during an upgrade; then the request/package are removed. Removing the request also prevents late results after cancellation. No supervisor, child job, scheduled task, or separate updater extension is used.
+The rewrite uses the same sequential shape as JRiggles' updater: call `curl`, wait for the response, compare with Aseprite's `Version` API, download, verify SHA-256 with Windows `certutil`, and invoke `app.command.Options`. There are no updater Timers, PowerShell helpers, detached workers, status JSON files, or polling callbacks.
 
-Aseprite may ask for script file/execute permissions on the first manual check. Declining permissions must leave ramp generation usable. Results and errors stay in the Updates window, without extra alerts. Closing that window leaves the current check running in the background; reopening it shows the current state. Temporary-file cleanup failures appear in status. Forced shutdown or denied deletion can leave temporary files for OS/user cleanup.
+Only one downloaded `.aseprite-extension` file is written to `app.fs.tempPath`. Release metadata and the small checksum response stay in memory. The package is retained until native Options returns, then removed. Aseprite owns archive/manifest validation and installation. Results and errors stay in the separate Updates window.
+
+This deliberately sequential implementation can keep Aseprite waiting during network calls. Connection timeout is 5 seconds; metadata/checksum requests have 15-second limits and the package download has a 60-second limit. GitHub API refusals/rate limits are shown as errors and can be retried later. Opening the panel does not start requests.
+
+Aseprite may ask for script file/execute permissions on the first manual check. Declining permissions must leave ramp generation usable. Results and errors stay in the Updates window, without extra alerts. The network calls run synchronously; reopening the window retains the most recent result. Temporary-file cleanup failures appear in status. Forced shutdown or denied deletion can leave temporary files for OS/user cleanup.
 
 Releases v0.1.5/v0.1.6 contain the old self-updater. Install the first version containing this replacement through Preferences > Extensions > Add Extension once. They cannot reliably bootstrap the replacement themselves.
 
@@ -49,4 +53,4 @@ Run `python3 scripts/build_hue_shift.py` only when a build is explicitly request
 
 ## Verification
 
-Lua regression tests, Windows PowerShell syntax check, and an unauthenticated public Release download/verification test run in CI. Live Aseprite GUI execution and permissions must be checked on the target Windows machine.
+Lua regression tests and Windows curl/certutil download/verification checks run in CI. Live Aseprite GUI execution and permissions must be checked on the target Windows machine.

@@ -18,7 +18,6 @@ paths = [
     "src/palette.lua",
     "src/wheel.lua",
     "src/dialog.lua",
-    "src/check-release.ps1",
     "src/update.lua",
     "src/update-dialog.lua",
 ]
