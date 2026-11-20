@@ -20,7 +20,7 @@ function M.open(ramp, paletteWriter, wheel, version)
   local dlg = Dialog{ title = "MeowMoon Hue Shift" }
   local references = {{r=73,g=51,b=86}, center, {r=246,g=214,b=139}}
   local selectedReference = 1
-  local barWidth, barHeight = 360, 30
+  local barWidth, barHeight = 360, 34
   local dragFrom, dragTo
   local syncing = false
   local singleControls = {"center", "style", "step_mode", "strength", "strength_help"}
@@ -116,8 +116,10 @@ function M.open(ramp, paletteWriter, wheel, version)
       dlg:repaint()
     end,
     onmouseup=function(ev)
-      if ev.button ~= MouseButton.LEFT or not dragFrom then return end
-      local destination = reference_at(ev)
+      if not dragFrom then return end
+      -- Canvas releases mouse capture on ANY button-up. Cancel on a secondary
+      -- release too, otherwise a mixed-button gesture can leave a stale drag.
+      local destination = ev.button == MouseButton.LEFT and reference_at(ev) or nil
       if destination then
         table.insert(references, destination, table.remove(references, dragFrom))
         selectedReference = destination
