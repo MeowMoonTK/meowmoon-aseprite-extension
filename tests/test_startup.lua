@@ -2,6 +2,14 @@
 local originalExecute = os.execute
 local originalOpen = io.open
 local originalTime = os.time
+local originalRemove = os.remove
+local resultPath, inInstaller
+local removed = {}
+os.remove = function(path)
+  assert(not inInstaller, "Do not delete files while the native installer is using them")
+  removed[path] = true
+  return true
+end
 local commands, timers, shells = {}, {}, {}
 local mockResponse = nil
 local failRead = false
@@ -10,11 +18,13 @@ local alerts, installations = {}, {}
 os.time = function() return 1740000000 end
 os.execute = function(command)
   shells[#shells+1] = command
+  resultPath = command:match('-ResultFile "(.-)"')
   return true, "exit", 0
 end
 io.open = function(path, mode)
   if failRead then error("Aseprite denied read permission") end
-  if not mockResponse then return nil end
+  if mode == "w" then return {close=function() return true end} end
+  if not mockResponse then return nil, "No such file", 2 end
   local file = {}
   function file:read() return mockResponse end
   function file:close() end
@@ -31,7 +41,7 @@ json = {
   decode = function(data)
     if data == "update" then
       return {status="update",version="0.1.8",
-        packagePath="C:/Temp Folder/hue-shift-verified.aseprite-extension"}
+        packagePath=resultPath .. ".aseprite-extension"}
     elseif data == "up_to_date" then
       return {status="up_to_date",message="Already current"}
     elseif data == "error" then
@@ -47,11 +57,18 @@ app = {
     tempPath="C:/Temp Folder",
     joinPath=function(...) return table.concat({...},"/") end,
     isFile=function(p)
-      return p == "C:/Temp Folder/hue-shift-verified.aseprite-extension"
+      return p == resultPath .. ".aseprite-extension"
     end
   },
   command={
     Options=function(args)
+      inInstaller = true
+      assert(not removed[args.installExtension])
+      -- A manual check from a nested dialog cannot launch another worker.
+      local count = #shells
+      commands.MeowMoonCheckHueShiftUpdates.onclick()
+      assert(#shells == count)
+      inInstaller = false
       installations[#installations+1] = args.installExtension
       return true
     end
@@ -85,7 +102,9 @@ mockResponse="update"
 timers[2].callback()
 assert(not timers[2].active)
 assert(#installations==1 and installations[1]:find("%.aseprite%-extension$"))
-assert(#alerts==0,"Native Aseprite installer owns confirmation dialogs.")
+assert(removed[resultPath] and removed[resultPath .. ".aseprite-extension"])
+assert(#alerts==1,"Only the nested busy check displays an informational alert.")
+alerts = {}
 
 -- Manual check should still run asynchronously and show up-to-date state.
 mockResponse=nil
@@ -152,4 +171,5 @@ exit(plugin)
 os.execute=originalExecute
 io.open=originalOpen
 os.time=originalTime
+os.remove=originalRemove
 print("OK: native updater startup, verified-install handoff, errors and UI")

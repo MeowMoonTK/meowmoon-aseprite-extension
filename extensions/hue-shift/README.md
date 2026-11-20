@@ -34,7 +34,7 @@ You can check manually using the **Check Updates** button in Hue Shift or **File
 
 ### Permissions and diagnostics
 
-On first use, Aseprite might ask for permission to execute PowerShell and read the temporary result file. **Give full trust to this script** / **Give Script Full Access** allows subsequent startup checks. Hue Shift's palette generator is usable even when these permissions are declined. Failed checks display diagnostics when invoked manually.
+On first use, Aseprite might ask for permission to execute PowerShell and read the temporary result file. **Give full trust to this script** / **Give Script Full Access** allows subsequent startup checks. Hue Shift's palette generator is usable even when these permissions are declined. Background errors remain in the Updates status and print diagnostics without a startup popup. Manual checks display errors immediately. Request creation, shell execution, reading and cleanup are permission-gated; denial must not disable the palette generator.
 
 Detailed log: \`%LOCALAPPDATA%\MeowMoon\HueShift\update.log\`. No GitHub CLI, authentication, separate extension or scheduled task is needed. The feature currently supports Windows; background checks do not run on other operating systems.
 
@@ -46,10 +46,20 @@ Releases v0.1.5 and v0.1.6 contain the previous self-updater. If that updater ca
 
 This implementation follows the native-install approach demonstrated by [Aseprite Extension Updater](https://github.com/JRiggles/Aseprite-Extension-Updater) (John Riggles, MIT). It does not copy that project's unmaintained networking logic or require its separate extension. [Aseprite's app.command API](https://aseprite.org/api/app_command) and [Timer API](https://aseprite.org/api/timer) are the platform sources. Installation remains user-confirmed rather than silent.
 
+### Request lifetime and installation status
+
+Only one check or native installer may run per plugin instance. A Windows named mutex prevents overlapping Release workers across plugin reloads and Aseprite instances. PowerShell bounds its network worker with a 120-second job timeout and stops/reaps it before publishing errors. Lua polls every 0.5 seconds with a 140-second fallback. If no trustworthy terminal response can be read, retries stay locked until Aseprite restarts.
+
+Each request owns exactly its JSON result and the `.pending`, `.writing`, `.sha256`, and `.aseprite-extension` paths appended to it. Removing the ownership marker cancels publication; PowerShell removes late results/downloads for cancelled requests. Lua cleans known paths only, never a deletion path from JSON. Cleanup failures remain visible in status. Forced process termination or denied deletion can leave files for OS/user cleanup.
+
+The package stays present throughout the synchronous `app.command.Options` call, including reentrant plugin exit. Cleanup runs after the call returns. Aseprite's [Options implementation](https://github.com/aseprite/aseprite/blob/main/src/app/commands/cmd_options.cpp) handles confirmation/installation inside the modal window, preserves preferences during replacement and catches some errors internally. The Lua return does not establish acceptance. Status therefore distinguishes checking, verified download, and installer closed with installation unconfirmed. Confirm the active version after restarting.
+
+See [verification evidence and the pending GUI checklist](../../docs/updater-verification.md).
+
 ## Build / release policy
 
 Run `python3 scripts/build_hue_shift.py` only when a build is explicitly requested. GitHub Actions performs tests only and does not publish Releases.
 
 ## Verification
 
-Lua regression tests, Windows PowerShell syntax check, and an unauthenticated public Release download/install smoke test run in CI. Live Aseprite GUI execution and permissions must be checked on the target Windows machine.
+Lua regression tests, Windows PowerShell syntax check, and an unauthenticated public Release download/verification test run in CI. Live Aseprite GUI execution and permissions must be checked on the target Windows machine.
