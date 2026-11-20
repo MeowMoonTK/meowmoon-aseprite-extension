@@ -92,6 +92,9 @@ jobs:
           if ($LASTEXITCODE -eq 0) { throw 'Invalid version should fail' }
           $errorStatus = Get-Content -LiteralPath $badResult -Raw | ConvertFrom-Json
           if ($errorStatus.status -ne 'error') { throw 'Invalid input did not report an error status' }
+          # GitHub's PowerShell runner propagates the last native exit code.
+          # The failure above was intentional and has already been asserted.
+          $global:LASTEXITCODE = 0
       - name: Test real detached Windows launcher with a spaced path
         shell: powershell
         run: |
