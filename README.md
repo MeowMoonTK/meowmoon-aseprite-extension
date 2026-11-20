@@ -4,15 +4,15 @@ Public repository containing independent Aseprite extensions.
 
 | Extension | Latest Release | Source |
 | --- | --- | --- |
-| Hue Shift | [v0.1.7](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.7) | [extensions/hue-shift](extensions/hue-shift) |
+| Hue Shift | [v0.1.8](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.8) | [extensions/hue-shift](extensions/hue-shift) |
 
 ## Hue Shift
 
-Generates color ramps with six hue-shift styles, an HSV Color Map preview, and an Add to Palette action.
+Generates color ramps with six single-color hue-shift styles, an HSV Color Map preview, and an Add to Palette action. Development source also includes **Multi-Anchor**: 2–8 soft color references, ordered dark to light, with a Target color count.
 
-Development source **v0.1.8** keeps only the core ramp generator, preview/Color Map and Add to Palette action. The updater and all related commands, scripts and UI have been removed. Install packages manually through Aseprite Preferences > Extensions.
+Source retains the core ramp generator, preview/Color Map and Add to Palette action. The updater and all related commands, scripts and UI have been removed. Install packages manually through Aseprite Preferences > Extensions.
 
-The published [v0.1.7](https://github.com/MeowMoonTK/meowmoon-aseprite-extension/releases/tag/hue-shift-v0.1.7) is an older build and still contains its updater; no replacement Release has been published yet.
+Published **v0.1.8** is the core-only release; Multi-Anchor is an unreleased source change. The manifest remains v0.1.8 until the next explicitly requested version/release.
 
 **Build policy:** GitHub Actions runs tests only. Package builds and GitHub Releases are made **only on explicit request**.
 
@@ -22,6 +22,7 @@ The published [v0.1.7](https://github.com/MeowMoonTK/meowmoon-aseprite-extension
 lua tests/test_hue_shift.lua
 lua tests/test_wheel.lua
 lua tests/test_startup.lua
+lua tests/test_multi_anchor.lua
 python3 scripts/build_hue_shift.py
 ```
 
